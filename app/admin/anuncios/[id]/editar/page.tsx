@@ -1,0 +1,774 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+
+interface Attribute {
+  name: string;
+  options: string[];
+}
+
+interface Variation {
+  name: string; // Ex: "15x20cm - 0.10mm"
+  sku: string;
+  price: string;
+  stock: string;
+  minStock: string;
+}
+
+interface ProductData {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  price: number;
+  originalPrice?: number;
+  stock: number;
+  minStock: number;
+  description: string;
+  width: string;
+  height: string;
+  thickness: string;
+  material: string;
+  // Variações pré-configuradas (Mocks)
+  hasVariations: boolean;
+  attributes: Attribute[];
+  variations: Variation[];
+}
+
+const MOCK_PRODUCTS: ProductData[] = [
+  {
+    id: '1',
+    name: 'Sacos Plásticos PE (Polietileno)',
+    category: 'Sacos PE',
+    sku: 'PE-010-15x20',
+    price: 29.90,
+    originalPrice: 34.90,
+    stock: 250,
+    minStock: 20,
+    description: 'Sacos plásticos de Polietileno (PE) de alta qualidade para embalagem em geral.',
+    width: '15',
+    height: '20',
+    thickness: '0.10',
+    material: 'Polietileno de Baixa Densidade (PEBD)',
+    hasVariations: true,
+    attributes: [
+      { name: 'Tamanho', options: ['15x20cm', '20x30cm'] },
+      { name: 'Espessura', options: ['0.10mm', '0.20mm'] }
+    ],
+    variations: [
+      { name: '15x20cm - 0.10mm', sku: 'PE-010-15x20', price: '29.90', stock: '100', minStock: '10' },
+      { name: '15x20cm - 0.20mm', sku: 'PE-020-15x20', price: '39.90', stock: '50', minStock: '10' },
+      { name: '20x30cm - 0.10mm', sku: 'PE-010-20x30', price: '49.90', stock: '60', minStock: '10' },
+      { name: '20x30cm - 0.20mm', sku: 'PE-020-20x30', price: '59.90', stock: '40', minStock: '10' },
+    ]
+  },
+  {
+    id: '2',
+    name: 'Sacos Plásticos Zip Lock',
+    category: 'Zip Lock',
+    sku: 'ZIP-N05',
+    price: 34.90,
+    originalPrice: 39.90,
+    stock: 180,
+    minStock: 30,
+    description: 'Sacos plásticos Zip Lock herméticos, práticos e duráveis.',
+    width: '10',
+    height: '14',
+    thickness: '0.08',
+    material: 'Polietileno de Baixa Densidade (PEBD)',
+    hasVariations: false,
+    attributes: [{ name: 'Tamanho', options: [] }],
+    variations: []
+  },
+  {
+    id: '3',
+    name: 'Sacos PE Industrial (Pacote 100un)',
+    category: 'Sacos PE',
+    sku: 'PE-IND-20x30',
+    price: 89.90,
+    originalPrice: 99.90,
+    stock: 42,
+    minStock: 15,
+    description: 'Sacos plásticos PE reforçados para aplicação em indústrias pesadas.',
+    width: '20',
+    height: '30',
+    thickness: '0.20',
+    material: 'Polietileno de Alta Densidade (PEAD)',
+    hasVariations: false,
+    attributes: [{ name: 'Tamanho', options: [] }],
+    variations: []
+  },
+  {
+    id: '4',
+    name: 'Kit Zip Lock Variado',
+    category: 'Zip Lock',
+    sku: 'ZIP-KIT-50',
+    price: 59.90,
+    originalPrice: 69.90,
+    stock: 8,
+    minStock: 10,
+    description: 'Kit contendo diversos tamanhos de sacos com fecho zip lock.',
+    width: 'Diversas',
+    height: 'Diversas',
+    thickness: '0.08',
+    material: 'Polietileno de Baixa Densidade (PEBD)',
+    hasVariations: false,
+    attributes: [{ name: 'Tamanho', options: [] }],
+    variations: []
+  },
+  {
+    id: '5',
+    name: 'Sacos PE 0,06mm (Econômico)',
+    category: 'Sacos PE',
+    sku: 'PE-0006-10x15',
+    price: 19.90,
+    originalPrice: 24.90,
+    stock: 0,
+    minStock: 10,
+    description: 'Sacos de PE mais finos para embalagens leves.',
+    width: '10',
+    height: '15',
+    thickness: '0.06',
+    material: 'Polietileno de Baixa Densidade (PEBD)',
+    hasVariations: false,
+    attributes: [{ name: 'Tamanho', options: [] }],
+    variations: []
+  },
+];
+
+export default function EditarAnuncioPage() {
+  const router = useRouter();
+  const params = useParams();
+  const productId = params?.id as string;
+
+  // Informações Gerais
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('Sacos PE');
+  const [sku, setSku] = useState('');
+  const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [stock, setStock] = useState('');
+  const [minStock, setMinStock] = useState('');
+  const [description, setDescription] = useState('');
+  
+  // Especificações Físicas
+  const [width, setWidth] = useState('');
+  const [height, setHeight] = useState('');
+  const [thickness, setThickness] = useState('');
+  const [material, setMaterial] = useState('');
+
+  // Controle de Variações
+  const [hasVariations, setHasVariations] = useState(false);
+  const [attributes, setAttributes] = useState<Attribute[]>([
+    { name: 'Tamanho', options: [] }
+  ]);
+  const [newOptionInputs, setNewOptionInputs] = useState<string[]>(['']);
+  const [variations, setVariations] = useState<Variation[]>([]);
+
+  // Campos de Edição em Lote
+  const [bulkPrice, setBulkPrice] = useState('');
+  const [bulkStock, setBulkStock] = useState('');
+  const [bulkMinStock, setBulkMinStock] = useState('10');
+
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  // Carregar dados iniciais do produto com suporte a variações
+  useEffect(() => {
+    if (productId) {
+      const product = MOCK_PRODUCTS.find(p => p.id === productId);
+      if (product) {
+        setName(product.name);
+        setCategory(product.category);
+        setSku(product.sku);
+        setPrice(product.price.toString());
+        setOriginalPrice(product.originalPrice?.toString() || '');
+        setStock(product.stock.toString());
+        setMinStock(product.minStock.toString());
+        setDescription(product.description);
+        setWidth(product.width);
+        setHeight(product.height);
+        setThickness(product.thickness);
+        setMaterial(product.material);
+        
+        // Variações
+        setHasVariations(product.hasVariations);
+        if (product.attributes && product.attributes.length > 0) {
+          setAttributes(product.attributes);
+          setNewOptionInputs(product.attributes.map(() => ''));
+        }
+        if (product.variations && product.variations.length > 0) {
+          setVariations(product.variations);
+        }
+        
+        setLoading(false);
+      } else {
+        setNotFound(true);
+        setLoading(false);
+      }
+    }
+  }, [productId]);
+
+  // Cartesian Product
+  const getCombinations = (attrs: Attribute[]): string[] => {
+    const activeAttrs = attrs.filter(a => a.name.trim() !== '' && a.options.length > 0);
+    if (activeAttrs.length === 0) return [];
+
+    let results: string[][] = [[]];
+    for (const attr of activeAttrs) {
+      const temp: string[][] = [];
+      for (const res of results) {
+        for (const opt of attr.options) {
+          temp.push([...res, opt]);
+        }
+      }
+      results = temp;
+    }
+    return results.map(r => r.join(' - '));
+  };
+
+  // Sincronizar variações dinamicamente conforme os atributos mudam
+  useEffect(() => {
+    if (!hasVariations) {
+      setVariations([]);
+      return;
+    }
+
+    const combNames = getCombinations(attributes);
+    setVariations(prev => {
+      return combNames.map(name => {
+        const existing = prev.find(v => v.name === name);
+        if (existing) return existing;
+
+        const cleanNameSuffix = name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').toLowerCase();
+        const generatedSku = sku ? `${sku}-${cleanNameSuffix}` : cleanNameSuffix;
+
+        return {
+          name,
+          sku: generatedSku,
+          price: price || '',
+          stock: stock || '',
+          minStock: minStock || '10'
+        };
+      });
+    });
+  }, [attributes, hasVariations, sku]);
+
+  // Adicionar Atributo
+  const handleAddAttribute = () => {
+    if (attributes.length >= 2) {
+      alert('É permitido configurar no máximo 2 atributos de variação.');
+      return;
+    }
+    setAttributes([...attributes, { name: '', options: [] }]);
+    setNewOptionInputs([...newOptionInputs, '']);
+  };
+
+  // Remover Atributo
+  const handleRemoveAttribute = (idx: number) => {
+    const updated = attributes.filter((_, i) => i !== idx);
+    setAttributes(updated);
+    const updatedInputs = newOptionInputs.filter((_, i) => i !== idx);
+    setNewOptionInputs(updatedInputs);
+  };
+
+  // Adicionar Opção
+  const handleAddOption = (attrIdx: number) => {
+    const optVal = newOptionInputs[attrIdx].trim();
+    if (!optVal) return;
+
+    if (attributes[attrIdx].options.includes(optVal)) {
+      alert('Esta opção já foi adicionada.');
+      return;
+    }
+
+    const updated = [...attributes];
+    updated[attrIdx].options.push(optVal);
+    setAttributes(updated);
+
+    const updatedInputs = [...newOptionInputs];
+    updatedInputs[attrIdx] = '';
+    setNewOptionInputs(updatedInputs);
+  };
+
+  // Remover Opção
+  const handleRemoveOption = (attrIdx: number, optIdx: number) => {
+    const updated = [...attributes];
+    updated[attrIdx].options = updated[attrIdx].options.filter((_, i) => i !== optIdx);
+    setAttributes(updated);
+  };
+
+  // Bulk Apply
+  const handleBulkApply = () => {
+    if (variations.length === 0) {
+      alert('Adicione atributos e opções para gerar variações.');
+      return;
+    }
+    setVariations(prev => prev.map(v => ({
+      ...v,
+      price: bulkPrice !== '' ? bulkPrice : v.price,
+      stock: bulkStock !== '' ? bulkStock : v.stock,
+      minStock: bulkMinStock !== '' ? bulkMinStock : v.minStock,
+    })));
+    alert('Valores em lote aplicados com sucesso na tabela abaixo!');
+  };
+
+  // Modificar linha individual
+  const handleVariationChange = (idx: number, field: keyof Variation, val: string) => {
+    const updated = [...variations];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setVariations(updated);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (hasVariations && variations.length === 0) {
+      alert('Você ativou as variações mas não adicionou nenhuma opção válida.');
+      return;
+    }
+
+    if (hasVariations) {
+      const invalid = variations.some(v => !v.sku || !v.price || !v.stock);
+      if (invalid) {
+        alert('Por favor, preencha todos os campos obrigatórios da tabela de variações.');
+        return;
+      }
+    }
+
+    alert('Anúncio atualizado com sucesso!');
+    router.push('/admin/anuncios');
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', height: '80vh', alignItems: 'center', justifyContent: 'center', color: 'var(--text-medium)' }}>
+        <p>Carregando dados do anúncio...</p>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '80vh', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <h2>Anúncio não encontrado</h2>
+        <p style={{ color: 'var(--text-light)' }}>O anúncio com ID {productId} não existe no sistema.</p>
+        <button onClick={() => router.push('/admin/anuncios')} className="btn btn-primary">
+          Voltar para Anúncios
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="admin-topbar">
+        <h1 className="admin-topbar-title">Editar Anúncio (#{productId})</h1>
+        <div className="admin-topbar-actions">
+          <button onClick={() => router.push('/admin/anuncios')} className="btn" style={{ padding: '10px 20px', fontSize: '0.9rem', cursor: 'pointer', background: '#fff', border: '1px solid var(--border)' }}>
+            Voltar
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-content" style={{ maxWidth: 860, paddingBottom: 60 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          
+          {/* Informações Básicas */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>Informações Básicas</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Título do Anúncio (Ex: Saco Plástico PE 15x20cm Grosso)</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>Categoria</label>
+                  <select
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', background: '#fff', fontFamily: 'inherit' }}
+                  >
+                    <option value="Sacos PE">Sacos Plásticos PE</option>
+                    <option value="Zip Lock">Sacos Zip Lock</option>
+                    <option value="Sacos a Vácuo">Sacos a Vácuo</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 600 }}>SKU de Controle Base</label>
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={e => setSku(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Toggle de Variações */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-dark)' }}>Variações do Produto</h4>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: '#666' }}>Selecione se este produto possui variações (ex: tamanho, espessura, cor).</p>
+              </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={hasVariations}
+                  onChange={e => setHasVariations(e.target.checked)}
+                  style={{ width: 20, height: 20, cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>Possui Variações</span>
+              </label>
+            </div>
+
+            {/* Configuração de Atributos e Opções */}
+            {hasVariations && (
+              <div style={{ marginTop: 24, borderTop: '1px solid #eee', paddingTop: 20 }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16 }}>Atributos de Variação</h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {attributes.map((attr, attrIdx) => (
+                    <div key={attrIdx} style={{ background: '#fafafa', borderRadius: 6, border: '1px solid #e2e8f0', padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#444' }}>Nome do Atributo:</span>
+                          <input
+                            type="text"
+                            placeholder="Ex: Tamanho, Espessura"
+                            value={attr.name}
+                            onChange={e => {
+                              const updated = [...attributes];
+                              updated[attrIdx].name = e.target.value;
+                              setAttributes(updated);
+                            }}
+                            style={{ flex: 1, maxWidth: 200, padding: '6px 10px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4 }}
+                          />
+                        </div>
+                        {attributes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttribute(attrIdx)}
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            Remover Atributo
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Chips/Valores já adicionados */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        {attr.options.map((opt, optIdx) => (
+                          <span
+                            key={optIdx}
+                            style={{
+                              background: '#fff', border: '1px solid #ccc', borderRadius: 20,
+                              padding: '4px 12px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 6
+                            }}
+                          >
+                            {opt}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOption(attrIdx, optIdx)}
+                              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 0, fontSize: '0.8rem', fontWeight: 'bold' }}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Input de Novo Valor */}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="text"
+                          placeholder="Adicione um valor (Ex: 20x30cm, 0.15mm)"
+                          value={newOptionInputs[attrIdx] || ''}
+                          onChange={e => {
+                            const updated = [...newOptionInputs];
+                            updated[attrIdx] = e.target.value;
+                            setNewOptionInputs(updated);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddOption(attrIdx);
+                            }
+                          }}
+                          style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddOption(attrIdx)}
+                          style={{ padding: '8px 16px', background: '#3483fa', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+                        >
+                          + Adicionar Option
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {attributes.length < 2 && (
+                  <button
+                    type="button"
+                    onClick={handleAddAttribute}
+                    style={{ marginTop: 16, background: '#fff', border: '1px dashed #3483fa', color: '#3483fa', borderRadius: 4, padding: '10px 16px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', display: 'block', width: '100%', textAlign: 'center' }}
+                  >
+                    ➕ Adicionar Segundo Atributo de Variação
+                  </button>
+                )}
+
+              </div>
+            )}
+          </div>
+
+          {/* Faturamento Geral (Desabilitado se usar variações) */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)', opacity: hasVariations ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>
+              Faturamento Geral {hasVariations && <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 500 }}>(Gerenciado na tabela de variações abaixo)</span>}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Preço de Venda Geral (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={price}
+                  onChange={e => setPrice(e.target.value)}
+                  disabled={hasVariations}
+                  required={!hasVariations}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Preço Original Geral (R$ - Opcional)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={originalPrice}
+                  onChange={e => setOriginalPrice(e.target.value)}
+                  disabled={hasVariations}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Saldo em Estoque Geral</label>
+                <input
+                  type="number"
+                  placeholder="Ex: 100"
+                  value={stock}
+                  onChange={e => setStock(e.target.value)}
+                  disabled={hasVariations}
+                  required={!hasVariations}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Estoque Mínimo Geral</label>
+                <input
+                  type="number"
+                  placeholder="Ex: 10"
+                  value={minStock}
+                  onChange={e => setMinStock(e.target.value)}
+                  disabled={hasVariations}
+                  required={!hasVariations}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela combinatória de Variações */}
+          {hasVariations && variations.length > 0 && (
+            <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <h3 style={{ marginBottom: 12, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)' }}>Variações Geradas ({variations.length})</h3>
+              
+              {/* Painel de Preenchimento em Lote */}
+              <div style={{ background: '#FFF0E6', border: '1px solid #FFE2D1', borderRadius: 6, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>⚡ Preencher em Lote:</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Preço R$"
+                  value={bulkPrice}
+                  onChange={e => setBulkPrice(e.target.value)}
+                  style={{ width: 110, padding: '6px 10px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4, background: '#fff' }}
+                />
+                <input
+                  type="number"
+                  placeholder="Estoque"
+                  value={bulkStock}
+                  onChange={e => setBulkStock(e.target.value)}
+                  style={{ width: 100, padding: '6px 10px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4, background: '#fff' }}
+                />
+                <input
+                  type="number"
+                  placeholder="Est. Mínimo"
+                  value={bulkMinStock}
+                  onChange={e => setBulkMinStock(e.target.value)}
+                  style={{ width: 100, padding: '6px 10px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4, background: '#fff' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleBulkApply}
+                  style={{ padding: '8px 16px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Aplicar
+                </button>
+              </div>
+
+              {/* Tabela de Variações */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: '#fafafa', borderBottom: '1px solid #e6e6e6', textAlign: 'left' }}>
+                    <th style={{ padding: '12px 14px' }}>Especificação / Combinação</th>
+                    <th>SKU da Variação *</th>
+                    <th>Preço (R$) *</th>
+                    <th>Estoque *</th>
+                    <th style={{ paddingRight: 14 }}>Est. Mínimo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {variations.map((v, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '14px', fontWeight: 600, color: '#333' }}>{v.name}</td>
+                      <td>
+                        <input
+                          type="text"
+                          value={v.sku}
+                          onChange={e => handleVariationChange(idx, 'sku', e.target.value)}
+                          placeholder="SKU"
+                          style={{ width: '90%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4, fontFamily: 'monospace' }}
+                          required
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={v.price}
+                          onChange={e => handleVariationChange(idx, 'price', e.target.value)}
+                          placeholder="0,00"
+                          style={{ width: '80%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4 }}
+                          required
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={v.stock}
+                          onChange={e => handleVariationChange(idx, 'stock', e.target.value)}
+                          placeholder="Ex: 50"
+                          style={{ width: '80%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4 }}
+                          required
+                        />
+                      </td>
+                      <td style={{ paddingRight: 14 }}>
+                        <input
+                          type="number"
+                          value={v.minStock}
+                          onChange={e => handleVariationChange(idx, 'minStock', e.target.value)}
+                          placeholder="Ex: 10"
+                          style={{ width: '80%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4 }}
+                          required
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Especificações Físicas da Embalagem */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)', opacity: hasVariations ? 0.6 : 1 }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>
+              Especificações da Embalagem {hasVariations && <span style={{ fontSize: '0.78rem', color: '#777', fontWeight: 500 }}>(Sobrescritas por variação)</span>}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Largura (cm)</label>
+                <input
+                  type="text"
+                  value={width}
+                  onChange={e => setWidth(e.target.value)}
+                  disabled={hasVariations}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Altura (cm)</label>
+                <input
+                  type="text"
+                  value={height}
+                  onChange={e => setHeight(e.target.value)}
+                  disabled={hasVariations}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Espessura (mm)</label>
+                <input
+                  type="text"
+                  value={thickness}
+                  onChange={e => setThickness(e.target.value)}
+                  disabled={hasVariations}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 3' }}>
+                <label style={{ fontWeight: 600 }}>Material / Composição</label>
+                <input
+                  type="text"
+                  value={material}
+                  onChange={e => setMaterial(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <div className="form-group" style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>Descrição</h3>
+            <label style={{ fontWeight: 600 }}>Descrição Detalhada do Anúncio</label>
+            <textarea
+              rows={5}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
+            />
+          </div>
+
+          {/* Botões do Formulário */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid #eee', paddingTop: 20 }}>
+            <button
+              type="button"
+              onClick={() => router.push('/admin/anuncios')}
+              className="btn"
+              style={{ padding: '12px 24px', cursor: 'pointer', background: '#fff', border: '1px solid var(--border)' }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ padding: '12px 24px', cursor: 'pointer', background: '#FF6B00', borderColor: '#FF6B00' }}
+            >
+              Salvar Alterações
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </>
+  );
+}

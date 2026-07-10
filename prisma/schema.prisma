@@ -1,0 +1,94 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  IN_PROCESS
+  REJECTED
+  CANCELLED
+  REFUNDED
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  mpPaymentId    String?     @unique
+  mpPreferenceId String?
+  blingOrderId   String?
+  blingNfeId     String?
+  status         OrderStatus @default(PENDING)
+  total          Float
+  shippingCost   Float       @default(0)
+  shippingMethod String?
+  trackingCode   String?
+  customerData   Json
+  items          OrderItem[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id])
+  blingId   String
+  name      String
+  variation Json
+  quantity  Int
+  unitPrice Float
+}
+
+model BlingToken {
+  id           String   @id @default(cuid())
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  expiresAt    DateTime
+  updatedAt    DateTime @updatedAt
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  authorName  String
+  rating      Int
+  title       String
+  comment     String
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model AbandonedCart {
+  id           String   @id @default(cuid())
+  email        String
+  customerName String?
+  items        Json     // Lista de itens no carrinho
+  notified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([createdAt])
+}
+
