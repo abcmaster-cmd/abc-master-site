@@ -55,6 +55,7 @@ const getProductImage = (name: string, category: string = '') => {
 };
 
 function formatCurrency(v: number) {
+  if (v === undefined || v === null || isNaN(v)) return 'R$ 0,00';
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 

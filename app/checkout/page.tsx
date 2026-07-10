@@ -49,6 +49,14 @@ export default function CheckoutPage() {
   const [selectedShipping, setSelectedShipping] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<string>('cartao');
+  const [cardForm, setCardForm] = useState({
+    number: '',
+    name: '',
+    expiry: '',
+    cvv: '',
+    installments: '1'
+  });
 
   const [form, setForm] = useState({
     name: '', cpf: '', email: '', phone: '',
@@ -182,68 +190,86 @@ export default function CheckoutPage() {
     setCepLoading(false);
   };
 
+  const validateStep3 = () => {
+    if (paymentMethod === 'cartao') {
+      if (!cardForm.number || cardForm.number.replace(/\s/g, '').length !== 16) {
+        setError('Por favor, informe um número de cartão de crédito válido (16 dígitos).');
+        return false;
+      }
+      if (!cardForm.name) {
+        setError('Por favor, informe o nome impresso no cartão.');
+        return false;
+      }
+      if (!cardForm.expiry || !cardForm.expiry.includes('/') || cardForm.expiry.length < 5) {
+        setError('Por favor, informe a validade do cartão (MM/AA).');
+        return false;
+      }
+      if (!cardForm.cvv || cardForm.cvv.length < 3) {
+        setError('Por favor, informe o CVV do cartão (3 dígitos).');
+        return false;
+      }
+    }
+    setError('');
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateStep1() || !validateStep2() || !selectedShipping) {
+      setError('Por favor, verifique os passos anteriores de identificação e frete.');
+      return;
+    }
+    if (!validateStep3()) return;
+
     setLoading(true);
     setError('');
+
+    // Simulação de gateway de pagamento (aguarda 1.2 segundos para processamento de transação segura)
+    await new Promise(resolve => setTimeout(resolve, 1200));
+
     try {
-      const res = await fetch('/api/payments/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items,
-          customer: { ...form, cep, isCorporate },
-          shipping: selectedShippingObj,
-          total,
-        }),
+      const purchasedIds = items.map(item => item.id || item.blingId);
+      const customerEmail = form.email.toLowerCase().trim();
+      const customerCpf = isCorporate ? form.cnpj : form.cpf;
+      const paymentMethodName = paymentMethod === 'cartao' ? 'Cartão de Crédito' : paymentMethod === 'pix' ? 'Pix' : 'Boleto Bancário';
+      
+      const localOrders = JSON.parse(localStorage.getItem('abc_orders') || '[]');
+      const newOrderId = Math.floor(1043 + Math.random() * 1000).toString();
+
+      localOrders.push({
+        id: newOrderId,
+        customer: form.name,
+        email: customerEmail,
+        cpf: customerCpf,
+        products: purchasedIds,
+        items: items.map(item => ({
+          name: item.name,
+          qty: item.quantity,
+          price: item.unitPrice,
+          category: item.category || 'Sacos PE'
+        })),
+        total: total,
+        shipping: selectedShippingObj?.price || 0,
+        status: 'approved', // Aprovado por padrão
+        date: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        nfe: false,
+        label: false,
+        paymentMethod: paymentMethodName
       });
-      const data = await res.json();
-      if (data.initPoint) {
-        // Salva localmente as informações da compra para fins de simulação de Comprador Verificado nas avaliações e central do usuário
-        try {
-          const purchasedIds = items.map(item => item.id || item.blingId);
-          const customerEmail = form.email.toLowerCase().trim();
-          const customerCpf = isCorporate ? form.cnpj : form.cpf;
-          
-          const localOrders = JSON.parse(localStorage.getItem('abc_orders') || '[]');
-          const newOrderId = Math.floor(1043 + Math.random() * 1000).toString();
-          const paymentMethodName = isCorporate ? 'Boleto Bancário' : 'Cartão de Crédito';
+      localStorage.setItem('abc_orders', JSON.stringify(localOrders));
 
-          localOrders.push({
-            id: newOrderId,
-            customer: form.name,
-            email: customerEmail,
-            cpf: customerCpf,
-            products: purchasedIds, // Mantido para compatibilidade com verificação de reviews
-            items: items.map(item => ({
-              name: item.name,
-              qty: item.quantity,
-              price: item.price,
-              category: item.category || 'Sacos PE'
-            })),
-            total: total,
-            shipping: selectedShippingObj?.price || 0,
-            status: 'approved', // Aprovado por padrão
-            date: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            nfe: false,
-            label: false,
-            paymentMethod: paymentMethodName
-          });
-          localStorage.setItem('abc_orders', JSON.stringify(localOrders));
-        } catch (storageErr) {
-          console.error('Erro ao registrar ordem local:', storageErr);
-        }
+      // Limpa carrinho e rascunho de checkout
+      localStorage.removeItem('abc_checkout_draft');
+      clearCart();
 
-        localStorage.removeItem('abc_checkout_draft');
-        clearCart();
-        window.location.href = data.initPoint;
-      } else {
-        setError(data.error || 'Erro ao criar pagamento. Tente novamente.');
-      }
-    } catch {
-      setError('Erro de conexão. Tente novamente.');
+      // Redireciona diretamente para a página de sucesso
+      router.push(`/sucesso?order_id=${newOrderId}`);
+    } catch (storageErr) {
+      console.error('Erro ao registrar ordem local:', storageErr);
+      setError('Erro ao registrar seu pedido. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const validateStep1 = () => {
@@ -471,7 +497,7 @@ export default function CheckoutPage() {
                   )}
 
                   {step === 2 && (
-                    /* Passo 2: Endereço */
+                    /* Passo 2: Endereço e Frete */
                     <div className="checkout-step" style={{ border: 'none', padding: 0 }}>
                       <div className="checkout-step-title" style={{ marginBottom: 16 }}>
                         <span className="step-num">2</span>
@@ -517,6 +543,34 @@ export default function CheckoutPage() {
                         </div>
                       </div>
 
+                      {/* Escolha do frete diretamente no Passo 2 */}
+                      {(cep.replace(/\D/g, '').length === 8 || shippingOptions.length > 0) && (
+                        <div style={{ borderTop: '1px solid #eee', paddingTop: 20, marginTop: 24 }}>
+                          <div className="checkout-step-title" style={{ marginBottom: 16 }}>
+                            <span className="step-num" style={{ background: '#3b82f6' }}>🚙</span>
+                            Opção de Frete
+                          </div>
+                          <div className="shipping-options" style={{ marginBottom: 20 }}>
+                            {shippingOptions.length > 0 ? (
+                              shippingOptions.map(opt => (
+                                <label key={opt.id} className={`shipping-option ${selectedShipping === opt.id ? 'selected' : ''}`} style={{ cursor: 'pointer' }}>
+                                  <div className="shipping-option-left">
+                                    <input type="radio" name="shipping" value={opt.id} checked={selectedShipping === opt.id} onChange={() => setSelectedShipping(opt.id)} />
+                                    <div>
+                                      <p className="shipping-name" style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>{opt.name}</p>
+                                      <p className="shipping-deadline" style={{ margin: '2px 0 0 0', fontSize: '0.76rem', color: '#64748b' }}>⏱ {opt.deadline}</p>
+                                    </div>
+                                  </div>
+                                  <span className="shipping-price" style={{ fontWeight: 800, color: '#FF6B00' }}>{formatCurrency(opt.price)}</span>
+                                </label>
+                              ))
+                            ) : (
+                              <p style={{ color: 'var(--text-medium)', fontSize: '0.9rem' }}>Carregando opções de frete para o CEP...</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginTop: 24 }}>
                         <button
                           type="button"
@@ -528,45 +582,184 @@ export default function CheckoutPage() {
                         <button
                           type="button"
                           className="btn btn-primary btn-large"
+                          disabled={!selectedShipping}
                           onClick={() => {
                             if (validateStep2()) {
-                              if (shippingOptions.length === 0) {
-                                handleCepBlur();
-                              }
                               setStep(3);
                             }
                           }}
                         >
-                          Ir para o Frete →
+                          Ir para o Pagamento →
                         </button>
                       </div>
                     </div>
                   )}
 
                   {step === 3 && (
-                    /* Passo 3: Frete e Pagamento */
+                    /* Passo 3: Pagamento (Tela de Checkout) */
                     <div className="checkout-step" style={{ border: 'none', padding: 0 }}>
-                      <div className="checkout-step-title" style={{ marginBottom: 16 }}>
+                      <div className="checkout-step-title" style={{ marginBottom: 20 }}>
                         <span className="step-num">3</span>
-                        Opção de Frete
+                        Forma de Pagamento
                       </div>
-                      <div className="shipping-options" style={{ marginBottom: 20 }}>
-                        {shippingOptions.length > 0 ? (
-                          shippingOptions.map(opt => (
-                            <label key={opt.id} className={`shipping-option ${selectedShipping === opt.id ? 'selected' : ''}`}>
-                              <div className="shipping-option-left">
-                                <input type="radio" name="shipping" value={opt.id} checked={selectedShipping === opt.id} onChange={() => setSelectedShipping(opt.id)} />
-                                <div>
-                                  <p className="shipping-name">{opt.name}</p>
-                                  <p className="shipping-deadline">⏱ {opt.deadline}</p>
-                                </div>
+
+                      {/* Seletor de Método de Pagamento */}
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+                        {[
+                          { id: 'cartao', label: 'Cartão de Crédito', icon: '💳' },
+                          { id: 'pix', label: 'Pix', icon: '⚡' },
+                          { id: 'boleto', label: 'Boleto Bancário', icon: '📄' }
+                        ].map(method => (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => {
+                              setPaymentMethod(method.id);
+                              setError('');
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '12px 10px',
+                              borderRadius: 8,
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              background: paymentMethod === method.id ? '#FFF0E6' : '#fff',
+                              color: paymentMethod === method.id ? '#FF6B00' : '#475569',
+                              border: paymentMethod === method.id ? '2px solid #FF6B00' : '1px solid #cbd5e1',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 6,
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <span style={{ fontSize: '1.4rem' }}>{method.icon}</span>
+                            {method.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Detalhes do Pagamento */}
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 20, marginBottom: 24 }}>
+                        
+                        {/* OPÇÃO 1: CARTÃO DE CRÉDITO */}
+                        {paymentMethod === 'cartao' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div className="form-group">
+                              <label>Número do Cartão</label>
+                              <input
+                                type="text"
+                                placeholder="0000 0000 0000 0000"
+                                required
+                                value={cardForm.number}
+                                onChange={e => {
+                                  const val = e.target.value.replace(/\D/g, '').substring(0, 16);
+                                  const masked = val.replace(/(\d{4})/g, '$1 ').trim();
+                                  setCardForm(prev => ({ ...prev, number: masked }));
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Nome Impresso no Cartão</label>
+                              <input
+                                type="text"
+                                placeholder="Como está gravado no cartão"
+                                required
+                                value={cardForm.name}
+                                onChange={e => setCardForm(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                              />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                              <div className="form-group">
+                                <label>Validade (MM/AA)</label>
+                                <input
+                                  type="text"
+                                  placeholder="MM/AA"
+                                  required
+                                  value={cardForm.expiry}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, '').substring(0, 4);
+                                    const masked = val.length > 2 ? `${val.substring(0, 2)}/${val.substring(2)}` : val;
+                                    setCardForm(prev => ({ ...prev, expiry: masked }));
+                                  }}
+                                />
                               </div>
-                              <span className="shipping-price">{formatCurrency(opt.price)}</span>
-                            </label>
-                          ))
-                        ) : (
-                          <p style={{ color: 'var(--text-medium)', fontSize: '0.9rem' }}>Informe um CEP válido no passo anterior para calcular o frete.</p>
+                              <div className="form-group">
+                                <label>CVV</label>
+                                <input
+                                  type="text"
+                                  placeholder="000"
+                                  required
+                                  maxLength={3}
+                                  value={cardForm.cvv}
+                                  onChange={e => setCardForm(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
+                                />
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label>Parcelamento</label>
+                              <select
+                                style={{ width: '100%', padding: '10px 12px', border: '1px solid #ccc', borderRadius: 6, fontSize: '0.88rem', background: '#fff' }}
+                                value={cardForm.installments}
+                                onChange={e => setCardForm(prev => ({ ...prev, installments: e.target.value }))}
+                              >
+                                <option value="1">1x de {formatCurrency(total)} sem juros</option>
+                                <option value="2">2x de {formatCurrency(total / 2)} sem juros</option>
+                                <option value="3">3x de {formatCurrency(total / 3)} sem juros</option>
+                              </select>
+                            </div>
+                          </div>
                         )}
+
+                        {/* OPÇÃO 2: PIX */}
+                        {paymentMethod === 'pix' && (
+                          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ width: 120, height: 120, margin: '0 auto 16px auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {/* QR Code SVG simulado */}
+                              <svg xmlns="http://www.w3.org/2000/svg" width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="1.5">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                                <rect x="14" y="14" width="3" height="3"/>
+                                <rect x="18" y="17" width="3" height="3"/>
+                                <rect x="14" y="18" width="3" height="3"/>
+                                <path d="M7 7h.01M17 7h.01M7 17h.01M17 14h3v3"/>
+                              </svg>
+                            </div>
+                            <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Código Pix Copia e Cola</p>
+                            <div style={{ display: 'flex', gap: 8, background: '#fff', border: '1px solid #cbd5e1', padding: '8px 12px', borderRadius: 6, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                              <code style={{ fontSize: '0.74rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+                                00020101021226830014br.gov.bcb.pix2561pix.mercadopago.com/qr/v2/demo-abc-master
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => alert('Código Pix copiado!')}
+                                style={{ background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                Copiar
+                              </button>
+                            </div>
+                            <p style={{ fontSize: '0.74rem', color: '#64748b', margin: 0 }}>
+                              O QR Code expira em 24h. A aprovação do pagamento via Pix é instantânea.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* OPÇÃO 3: BOLETO BANCÁRIO */}
+                        {paymentMethod === 'boleto' && (
+                          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                            <div style={{ color: '#FF6B00', fontSize: '2.5rem', marginBottom: 12 }}>📄</div>
+                            <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1e293b', marginBottom: 6 }}>Boleto Bancário ABC Master</p>
+                            <p style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: '1.4', margin: '0 0 16px 0' }}>
+                              O boleto será gerado com vencimento de 3 dias corridos. Você poderá pagar em qualquer banco, lotérica ou aplicativo móvel. A compensação pode levar até 2 dias úteis.
+                            </p>
+                            <div style={{ background: '#fff', padding: '10px 12px', borderRadius: 6, fontSize: '0.78rem', color: '#475569', border: '1px dashed #cbd5e1', display: 'inline-block' }}>
+                              Vencimento: <strong>{new Date(Date.now() + 3*24*60*60*1000).toLocaleDateString('pt-BR')}</strong>
+                            </div>
+                          </div>
+                        )}
+
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginTop: 24 }}>
@@ -580,19 +773,15 @@ export default function CheckoutPage() {
                         <button
                           type="submit"
                           className="btn btn-primary btn-large"
-                          disabled={loading || !selectedShipping}
+                          disabled={loading}
                         >
                           {loading ? (
                             <><span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> Processando...</>
                           ) : (
-                            <>🔒 Pagar com Mercado Pago</>
+                            <>🔒 Finalizar Pagamento ({formatCurrency(total)})</>
                           )}
                         </button>
                       </div>
-
-                      <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-light)', marginTop: 10 }}>
-                        Pagamento 100% seguro. Você será redirecionado para o Mercado Pago.
-                      </p>
                     </div>
                   )}
 

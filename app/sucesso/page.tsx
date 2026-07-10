@@ -13,12 +13,12 @@ export default function SucessoPage() {
           <h1>Pedido Confirmado! 🎉</h1>
           <p>Seu pagamento foi aprovado com sucesso. Em breve você receberá um e-mail com os detalhes do pedido e a nota fiscal.</p>
           <div className="result-order">
-            <p>Acompanhe seu pedido pelo e-mail cadastrado ou entre em contato pelo WhatsApp.</p>
+            <p>Você pode acompanhar o status de entrega do seu pedido em tempo real na sua área do cliente.</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <a href="https://wa.me/5511999999999" target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-full">
-              💬 Falar com a Equipe
-            </a>
+            <Link href="/central-usuario" className="btn btn-primary btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              📦 Acompanhar Pedido
+            </Link>
             <Link href="/loja" className="btn btn-secondary btn-full">Continuar Comprando</Link>
           </div>
         </div>
