@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { useCart } from '@/contexts/CartContext';
+import { useUser } from '@/contexts/UserContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -24,9 +25,23 @@ const SHIPPING_MOCK = [
 
 export default function CheckoutPage() {
   const { items, subtotal, clearCart } = useCart();
+  const { user } = useUser();
   const router = useRouter();
 
   const [step, setStep] = useState(1);
+
+  // Preenche os dados pessoais se o cliente já estiver logado
+  useEffect(() => {
+    if (user) {
+      setForm(prev => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+        cpf: user.cpf,
+        phone: user.phone || '',
+      }));
+    }
+  }, [user]);
   const [isCorporate, setIsCorporate] = useState(false);
   const [cep, setCep] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
@@ -43,6 +58,52 @@ export default function CheckoutPage() {
 
   const selectedShippingObj = shippingOptions.find(s => s.id === selectedShipping);
   const total = subtotal + (selectedShippingObj?.price ?? 0);
+
+  // 1. Carregar rascunho do localStorage na montagem
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('abc_checkout_draft');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.form) {
+          setForm(prev => ({ ...prev, ...parsed.form }));
+        }
+        if (parsed.cep) {
+          setCep(parsed.cep);
+        }
+        if (parsed.isCorporate !== undefined) {
+          setIsCorporate(parsed.isCorporate);
+        }
+        if (parsed.selectedShipping) {
+          setSelectedShipping(parsed.selectedShipping);
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao ler rascunho de checkout:', e);
+    }
+  }, []);
+
+  // 2. Salvar rascunho no localStorage conforme preenche
+  useEffect(() => {
+    try {
+      localStorage.setItem('abc_checkout_draft', JSON.stringify({
+        form,
+        cep,
+        isCorporate,
+        selectedShipping
+      }));
+    } catch (e) {
+      console.warn('Erro ao salvar rascunho de checkout:', e);
+    }
+  }, [form, cep, isCorporate, selectedShipping]);
+
+  // 3. Disparar a consulta de frete automaticamente se o CEP estiver preenchido e não houver opções carregadas
+  useEffect(() => {
+    const cleaned = cep.replace(/\D/g, '');
+    if (cleaned.length === 8 && shippingOptions.length === 0) {
+      handleCepBlur();
+    }
+  }, [cep, shippingOptions]);
 
   const handleCepBlur = async () => {
     const cleaned = cep.replace(/\D/g, '');
@@ -138,24 +199,42 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (data.initPoint) {
-        // Salva localmente as informações da compra para fins de simulação de Comprador Verificado nas avaliações
+        // Salva localmente as informações da compra para fins de simulação de Comprador Verificado nas avaliações e central do usuário
         try {
-          const purchasedIds = items.map(item => item.blingId);
-          const customerEmail = form.email;
+          const purchasedIds = items.map(item => item.id || item.blingId);
+          const customerEmail = form.email.toLowerCase().trim();
           const customerCpf = isCorporate ? form.cnpj : form.cpf;
           
           const localOrders = JSON.parse(localStorage.getItem('abc_orders') || '[]');
+          const newOrderId = Math.floor(1043 + Math.random() * 1000).toString();
+          const paymentMethodName = isCorporate ? 'Boleto Bancário' : 'Cartão de Crédito';
+
           localOrders.push({
+            id: newOrderId,
+            customer: form.name,
             email: customerEmail,
             cpf: customerCpf,
-            products: purchasedIds,
-            date: new Date().toISOString()
+            products: purchasedIds, // Mantido para compatibilidade com verificação de reviews
+            items: items.map(item => ({
+              name: item.name,
+              qty: item.quantity,
+              price: item.price,
+              category: item.category || 'Sacos PE'
+            })),
+            total: total,
+            shipping: selectedShippingObj?.price || 0,
+            status: 'approved', // Aprovado por padrão
+            date: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            nfe: false,
+            label: false,
+            paymentMethod: paymentMethodName
           });
           localStorage.setItem('abc_orders', JSON.stringify(localOrders));
         } catch (storageErr) {
           console.error('Erro ao registrar ordem local:', storageErr);
         }
 
+        localStorage.removeItem('abc_checkout_draft');
         clearCart();
         window.location.href = data.initPoint;
       } else {
@@ -257,90 +336,126 @@ export default function CheckoutPage() {
                     /* Passo 1: Dados Pessoais / Jurídicos */
                     <div className="checkout-step" style={{ border: 'none', padding: 0 }}>
                       
-                      {/* Seleção de Tipo de Cadastro */}
-                      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-                        <button
-                          type="button"
-                          onClick={() => { setIsCorporate(false); setError(''); }}
-                          style={{
-                            flex: 1, padding: '10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700,
-                            background: !isCorporate ? '#FF6B00' : '#f5f5f5', color: !isCorporate ? '#fff' : '#666',
-                            border: `1px solid ${!isCorporate ? '#FF6B00' : '#ddd'}`, transition: 'all 0.2s',
-                          }}
-                        >
-                          Pessoa Física (CPF)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setIsCorporate(true); setError(''); }}
-                          style={{
-                            flex: 1, padding: '10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700,
-                            background: isCorporate ? '#FF6B00' : '#f5f5f5', color: isCorporate ? '#fff' : '#666',
-                            border: `1px solid ${isCorporate ? '#FF6B00' : '#ddd'}`, transition: 'all 0.2s',
-                          }}
-                        >
-                          Pessoa Jurídica (CNPJ)
-                        </button>
-                      </div>
-
-                      <div className="checkout-step-title" style={{ marginBottom: 16 }}>
-                        <span className="step-num">1</span>
-                        {isCorporate ? 'Dados da Empresa' : 'Dados Pessoais'}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                          <label>{isCorporate ? 'Razão Social' : 'Nome Completo'}</label>
-                          <input type="text" placeholder={isCorporate ? 'Razão Social da empresa' : 'Seu nome completo'} required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-                        </div>
-                        
-                        {!isCorporate ? (
-                          <div className="form-group">
-                            <label>CPF</label>
-                            <input type="text" placeholder="000.000.000-00" required value={form.cpf} onChange={e => setForm(p => ({ ...p, cpf: e.target.value }))} />
+                      {user ? (
+                        /* Confirmação simples para usuário logado */
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 20, marginBottom: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', marginBottom: 12 }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>Identificação Confirmada (Minha Conta)</span>
                           </div>
-                        ) : (
-                          <div className="form-group">
-                            <label>CNPJ</label>
-                            <input type="text" placeholder="00.000.000/0001-00" required value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} />
-                          </div>
-                        )}
-
-                        <div className="form-group">
-                          <label>Telefone / WhatsApp</label>
-                          <input type="tel" placeholder="(11) 99999-9999" required value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-                        </div>
-
-                        {isCorporate && (
-                          <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                            <label>Inscrição Estadual (I.E.)</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-                              <input
-                                type="text"
-                                placeholder="Número da I.E."
-                                disabled={form.isIeExempt}
-                                required={!form.isIeExempt}
-                                value={form.ie}
-                                onChange={e => setForm(p => ({ ...p, ie: e.target.value }))}
-                                style={{ flex: 1, margin: 0 }}
-                              />
-                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0, fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={form.isIeExempt}
-                                  onChange={e => setForm(p => ({ ...p, isIeExempt: e.target.checked, ie: e.target.checked ? '' : p.ie }))}
-                                  style={{ width: 'auto', margin: 0 }}
-                                />
-                                Isento
-                              </label>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: '0.84rem' }}>
+                            <div>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Nome Completo</span>
+                              <strong style={{ color: '#1e293b' }}>{user.name}</strong>
+                            </div>
+                            <div>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>E-mail</span>
+                              <strong style={{ color: '#1e293b', wordBreak: 'break-all' }}>{user.email}</strong>
+                            </div>
+                            <div>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>CPF</span>
+                              <strong style={{ color: '#1e293b' }}>{user.cpf}</strong>
+                            </div>
+                            <div>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>WhatsApp / Telefone</span>
+                              <strong style={{ color: '#1e293b' }}>{user.phone || 'Não cadastrado'}</strong>
                             </div>
                           </div>
-                        )}
 
-                        <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                          <label>E-mail</label>
-                          <input type="email" placeholder="seu@email.com" required value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                          <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: 14, paddingTop: 12, fontSize: '0.74rem', color: '#64748b' }}>
+                            Quer faturar para outra pessoa/empresa? <Link href="/login" style={{ color: '#FF6B00', fontWeight: 700, textDecoration: 'underline' }}>Trocar de conta</Link>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* Formulário original com inputs */
+                        <>
+                          {/* Seleção de Tipo de Cadastro */}
+                          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                            <button
+                              type="button"
+                              onClick={() => { setIsCorporate(false); setError(''); }}
+                              style={{
+                                flex: 1, padding: '10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700,
+                                background: !isCorporate ? '#FF6B00' : '#f5f5f5', color: !isCorporate ? '#fff' : '#666',
+                                border: `1px solid ${!isCorporate ? '#FF6B00' : '#ddd'}`, transition: 'all 0.2s',
+                              }}
+                            >
+                              Pessoa Física (CPF)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setIsCorporate(true); setError(''); }}
+                              style={{
+                                flex: 1, padding: '10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700,
+                                background: isCorporate ? '#FF6B00' : '#f5f5f5', color: isCorporate ? '#fff' : '#666',
+                                border: `1px solid ${isCorporate ? '#FF6B00' : '#ddd'}`, transition: 'all 0.2s',
+                              }}
+                            >
+                              Pessoa Jurídica (CNPJ)
+                            </button>
+                          </div>
+
+                          <div className="checkout-step-title" style={{ marginBottom: 16 }}>
+                            <span className="step-num">1</span>
+                            {isCorporate ? 'Dados da Empresa' : 'Dados Pessoais'}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                              <label>{isCorporate ? 'Razão Social' : 'Nome Completo'}</label>
+                              <input type="text" placeholder={isCorporate ? 'Razão Social da empresa' : 'Seu nome completo'} required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                            </div>
+                            
+                            {!isCorporate ? (
+                              <div className="form-group">
+                                <label>CPF</label>
+                                <input type="text" placeholder="000.000.000-00" required value={form.cpf} onChange={e => setForm(p => ({ ...p, cpf: e.target.value }))} />
+                              </div>
+                            ) : (
+                              <div className="form-group">
+                                <label>CNPJ</label>
+                                <input type="text" placeholder="00.000.000/0001-00" required value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} />
+                              </div>
+                            )}
+
+                            <div className="form-group">
+                              <label>Telefone / WhatsApp</label>
+                              <input type="tel" placeholder="(11) 99999-9999" required value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                            </div>
+
+                            {isCorporate && (
+                              <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                                <label>Inscrição Estadual (I.E.)</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                                  <input
+                                    type="text"
+                                    placeholder="Número da I.E."
+                                    disabled={form.isIeExempt}
+                                    required={!form.isIeExempt}
+                                    value={form.ie}
+                                    onChange={e => setForm(p => ({ ...p, ie: e.target.value }))}
+                                    style={{ flex: 1, margin: 0 }}
+                                  />
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', margin: 0, fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={form.isIeExempt}
+                                      onChange={e => setForm(p => ({ ...p, isIeExempt: e.target.checked, ie: e.target.checked ? '' : p.ie }))}
+                                      style={{ width: 'auto', margin: 0 }}
+                                    />
+                                    Isento
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                              <label>E-mail</label>
+                              <input type="email" placeholder="seu@email.com" required value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       <button
                         type="button"
@@ -350,7 +465,7 @@ export default function CheckoutPage() {
                           if (validateStep1()) setStep(2);
                         }}
                       >
-                        Continuar para Entrega →
+                        Confirmar e Continuar para Entrega →
                       </button>
                     </div>
                   )}

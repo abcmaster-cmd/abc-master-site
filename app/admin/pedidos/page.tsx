@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 interface OrderItem {
@@ -165,9 +165,48 @@ const getProductImageUrl = (name: string, category: string) => {
 };
 
 export default function PedidosPage() {
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('Aprovados');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Carregar do localStorage na montagem
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('abc_orders');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const hasRichStructure = parsed.some((o: any) => o.items && o.total !== undefined);
+        if (hasRichStructure) {
+          const validOrders = parsed.filter((o: any) => o.items && o.total !== undefined);
+          const merged = [...validOrders];
+          MOCK_ORDERS.forEach(mo => {
+            if (!merged.some(o => o.id === mo.id)) {
+              merged.push(mo);
+            }
+          });
+          merged.sort((a, b) => Number(b.id) - Number(a.id));
+          setOrders(merged);
+          return;
+        }
+      }
+      localStorage.setItem('abc_orders', JSON.stringify(MOCK_ORDERS));
+      setOrders(MOCK_ORDERS);
+    } catch (e) {
+      console.error(e);
+      setOrders(MOCK_ORDERS);
+    }
+  }, []);
+
+  // Salvar no localStorage sempre que as ordens mudarem
+  useEffect(() => {
+    if (orders.length > 0) {
+      try {
+        localStorage.setItem('abc_orders', JSON.stringify(orders));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [orders]);
 
   // Simular Emissão de NF-e
   const handleEmitNfeTable = (id: string) => {

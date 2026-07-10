@@ -50,21 +50,40 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         ];
         localStorage.setItem('abc_registered_customers', JSON.stringify(defaultCustomers));
 
-        // Registra também compras fictícias iniciais para esses usuários padrão conseguirem avaliar
+        // Registra também compras fictícias iniciais para esses usuários padrão conseguirem acompanhar
         const localOrders = localStorage.getItem('abc_orders');
         if (!localOrders) {
           const defaultOrders = [
             {
+              id: '1041',
+              customer: 'Marcio Silva',
               email: 'marcio@teste.com',
-              cpf: '123.456.789-00',
-              products: ['saco-pe-50x70', 'sacos-zip-n10'],
-              date: new Date().toISOString()
+              items: [
+                { name: '1 Kg Saco Plástico Pe 50 X 70 X 0,20 Transparente (grosso)', qty: 1, price: 53.91, category: 'Sacos PE' },
+                { name: 'Saco Plástico Zip Lock N10 24x34cm (100 unidades)', qty: 2, price: 79.20, category: 'Zip Lock' }
+              ],
+              total: 212.31,
+              shipping: 12.90,
+              status: 'approved',
+              date: '09/07/2026 às 14:32',
+              nfe: true,
+              label: false,
+              paymentMethod: 'PIX'
             },
             {
+              id: '1039',
+              customer: 'Ana Souza',
               email: 'ana@teste.com',
-              cpf: '987.654.321-11',
-              products: ['sacos-zip-n4', 'saco-pe-grosso-60x80'],
-              date: new Date().toISOString()
+              items: [
+                { name: 'Saco Plástico Zip Lock N05 10x14cm (100 unidades)', qty: 3, price: 34.90, category: 'Zip Lock' }
+              ],
+              total: 119.60,
+              shipping: 14.90,
+              status: 'pending',
+              date: '09/07/2026 às 11:15',
+              nfe: false,
+              label: false,
+              paymentMethod: 'PIX'
             }
           ];
           localStorage.setItem('abc_orders', JSON.stringify(defaultOrders));

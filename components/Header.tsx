@@ -47,9 +47,12 @@ export default function Header() {
 
             {/* Sessão do Cliente no Topo */}
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ color: '#fff', fontWeight: 600 }}>Olá, {user.name.split(' ')[0]}</span>
-                <button onClick={logoutClient} style={{ background: 'none', border: 'none', color: '#FF6B00', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, padding: 0, outline: 'none' }}>Sair</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Link href="/central-usuario" style={{ color: '#fff', fontWeight: 600, textDecoration: 'none' }}>Olá, {user.name.split(' ')[0]}</Link>
+                <span style={{ color: '#333' }}>|</span>
+                <Link href="/central-usuario" style={{ color: '#FF6B00', fontWeight: 700, textDecoration: 'none' }}>Meus Pedidos</Link>
+                <span style={{ color: '#333' }}>|</span>
+                <button onClick={logoutClient} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, padding: 0, outline: 'none' }}>Sair</button>
               </div>
             ) : (
               <div style={{ display: 'flex', gap: 10 }}>
@@ -86,9 +89,17 @@ export default function Header() {
 
             {/* Login / Cadastro */}
             {user ? (
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', border: '2px solid #eee', borderRadius: 6, padding: '5px 12px', height: 44, boxSizing: 'border-box', background: '#fff' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#111' }}>Olá, {user.name.split(' ')[0]}</span>
-                <button onClick={logoutClient} style={{ background: 'none', border: 'none', color: '#FF6B00', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, padding: 0, outline: 'none', textAlign: 'left', textDecoration: 'underline' }}>Sair</button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <Link href="/central-usuario"
+                  style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', justifyContent: 'center', border: '2px solid #eee', borderRadius: 6, padding: '5px 12px', height: 44, boxSizing: 'border-box', background: '#fff' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#111' }}>Minha Conta</span>
+                  <span style={{ fontSize: '0.68rem', color: '#FF6B00', fontWeight: 700 }}>Meus Pedidos</span>
+                </Link>
+                <button onClick={logoutClient} 
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #eee', borderRadius: 6, padding: '5px 10px', height: 44, boxSizing: 'border-box', background: '#f9f9f9', color: '#888', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, outline: 'none' }}
+                  title="Sair da Conta">
+                  Sair
+                </button>
               </div>
             ) : (
               <Link href="/login"
