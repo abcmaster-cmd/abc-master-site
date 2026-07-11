@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { useCart } from '@/contexts/CartContext';
 import Link from 'next/link';
+import { calculateShippingForCart } from '@/lib/shippingOptimizer';
 
 // Desenho flat de miniatura de produtos para o carrinho
 const CartProductImageSvg = ({ blingId }: { blingId: string }) => {
@@ -69,6 +70,16 @@ export default function CarrinhoPage() {
   // Simulação de Desconto Fictício estilo Mercado Livre
   const originalSubtotal = activeSubtotal * 1.1; // 10% a mais simulado de preço cheio
 
+  const handleCepChange = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 5) {
+      setCep(digits);
+    } else {
+      setCep(`${digits.slice(0, 5)}-${digits.slice(5, 8)}`);
+    }
+    setCepError('');
+  };
+
   const handleCalculateShipping = () => {
     const cleaned = cep.replace(/\D/g, '');
     if (cleaned.length !== 8) {
@@ -80,17 +91,78 @@ export default function CarrinhoPage() {
     }
     setCepError('');
     
-    // Simulação realista de frete integrada à faixa de preços do e-commerce
-    const options = [
-      { id: 'bling-envio-normal', label: 'Melhor Envios (PAC)', price: activeSubtotal >= 150 ? 0 : 18.90, days: 5 },
-      { id: 'bling-envio-expresso', label: 'Melhor Envios (SEDEX)', price: activeSubtotal >= 300 ? 0 : 34.50, days: 2 },
-      { id: 'jadlog', label: 'Jadlog Express', price: activeSubtotal >= 200 ? 0 : 22.10, days: 4 }
-    ];
+    // Mapear itens do carrinho para o formato do otimizador de frete
+    const cartItems = selectedList.map(item => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity
+    }));
+
+    const rawOptions = calculateShippingForCart(cleaned, cartItems);
+
+    // Mapear opções do otimizador para o estado da página
+    const options = rawOptions.map(opt => ({
+      id: opt.id,
+      label: `${opt.name} - ${opt.description || 'Entrega rápida'}`,
+      price: opt.price,
+      days: opt.id.includes('flex') ? 1 : opt.id.includes('sedex') || opt.id.includes('express') ? 2 : 5
+    }));
+
+    if (options.length === 0) {
+      setCepError('Nenhuma opção de frete disponível para este CEP.');
+      setShippingOptions([]);
+      setShippingCost(null);
+      setShippingMethod('');
+      return;
+    }
     
     setShippingOptions(options);
     setShippingMethod(options[0].id);
     setShippingCost(options[0].price);
+    
+    // Salvar o CEP memorizado no localStorage
+    localStorage.setItem('abc_user_cep', cleaned);
   };
+
+  // Carregar o CEP memorizado e calcular o frete do carrinho de forma automática
+  useEffect(() => {
+    const savedCep = localStorage.getItem('abc_user_cep');
+    if (savedCep && savedCep.length === 8) {
+      const formatted = `${savedCep.slice(0, 5)}-${savedCep.slice(5, 8)}`;
+      setCep(formatted);
+      
+      if (selectedList.length > 0) {
+        const cartItems = selectedList.map(item => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity
+        }));
+        
+        const rawOptions = calculateShippingForCart(savedCep, cartItems);
+        const options = rawOptions.map(opt => ({
+          id: opt.id,
+          label: `${opt.name} - ${opt.description || 'Entrega rápida'}`,
+          price: opt.price,
+          days: opt.id.includes('flex') ? 1 : opt.id.includes('sedex') || opt.id.includes('express') ? 2 : 5
+        }));
+        
+        if (options.length > 0) {
+          setShippingOptions(options);
+          
+          setShippingMethod(prev => {
+            const matched = options.find(o => o.id === prev);
+            if (matched) {
+              setShippingCost(matched.price);
+              return matched.id;
+            } else {
+              setShippingCost(options[0].price);
+              return options[0].id;
+            }
+          });
+        }
+      }
+    }
+  }, [items, selectedItems]);
 
   // Valor Total com frete incluso
   const finalTotal = activeSubtotal + (shippingCost ?? 0);
@@ -154,7 +226,7 @@ export default function CarrinhoPage() {
                         type="text"
                         placeholder="00000-000"
                         value={cep}
-                        onChange={e => setCep(e.target.value)}
+                        onChange={e => handleCepChange(e.target.value)}
                         maxLength={9}
                         style={{
                           padding: '8px 12px', border: '1px solid #ccc', borderRadius: 4,
