@@ -212,6 +212,55 @@ export default function CheckoutPage() {
       const localOrders = JSON.parse(localStorage.getItem('abc_orders') || '[]');
       const newOrderId = Math.floor(1043 + Math.random() * 1000).toString();
 
+      // Envia o pedido para o servidor Next.js que integra com o Bling ERP
+      let blingOrderIdResult = null;
+      try {
+        const res = await fetch('/api/pedidos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            idLocal: newOrderId,
+            customerName: form.name,
+            email: customerEmail,
+            cpfOrCnpj: customerCpf,
+            isCorporate: isCorporate,
+            items: items.map(item => ({
+              id: item.id,
+              sku: item.sku,
+              name: item.name,
+              quantity: item.quantity,
+              price: item.unitPrice,
+              blingProductSku: item.blingProductSku || undefined,
+              blingProductId: item.blingProductId || undefined
+            })),
+            total: total,
+            shippingCost: selectedShippingObj?.price || 0,
+            shippingMethod: selectedShippingObj?.name || 'Frete Comercial',
+            paymentMethod: paymentMethodName,
+            address: {
+              street: form.street,
+              number: form.number,
+              complement: form.complement,
+              neighborhood: form.neighborhood,
+              city: form.city,
+              state: form.state,
+              cep: cep.replace(/\D/g, ''),
+              phone: form.phone
+            }
+          })
+        });
+
+        const data = await res.json();
+        if (data.success && data.blingOrderId) {
+          blingOrderIdResult = data.blingOrderId;
+          console.log('✓ Pedido integrado com sucesso no Bling ERP. ID:', blingOrderIdResult);
+        }
+      } catch (apiErr) {
+        console.warn('⚠️ Falha ao integrar pedido com o Bling ERP em tempo real:', apiErr);
+      }
+
       localOrders.push({
         id: newOrderId,
         customer: form.name,
@@ -230,7 +279,8 @@ export default function CheckoutPage() {
         date: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         nfe: false,
         label: false,
-        paymentMethod: paymentMethodName
+        paymentMethod: paymentMethodName,
+        blingOrderId: blingOrderIdResult || undefined
       });
       localStorage.setItem('abc_orders', JSON.stringify(localOrders));
 
