@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function ConfigPage() {
   const [activeTab, setActiveTab] = useState<'empresa' | 'integracoes' | 'frete'>('empresa');
