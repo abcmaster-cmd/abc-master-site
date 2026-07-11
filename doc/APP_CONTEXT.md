@@ -65,9 +65,8 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
 - **Dropdown do Header**: O botão "Todos os Produtos" no menu de navegação superior foi convertido em um dropdown suspenso funcional ativado por hover.
 - **Mix de Produtos Simplificado**: Menu e categorias simplificados para conter apenas as categorias de atuação inicial: "Sacos Plásticos PE", "Sacos Zip Lock" e "Sacos a Vácuo". Foram criados os mocks e ranhuras de imagem específicas para a categoria de sacos a vácuo na loja.
 - **Desenvolvimento Local**: Rodando Next.js localmente na porta 3000 (`npm run dev`).
-- **Desenvolvimento Local**: Rodando Next.js localmente na porta 3000 (`npm run dev`).
 - **Infraestrutura de Produção e Deploy**:
-  - **Vercel**: Hospedado com sucesso via Vercel CLI na URL `https://abc-master-site-mq2sxf8cf-vinicius-marinhos-projects.vercel.app`.
+  - **Vercel**: Hospedado com sucesso via Vercel CLI na URL `https://abc-master-site-5q5w9o1x8-vinicius-marinhos-projects.vercel.app`.
   - **Render**: Banco de dados PostgreSQL managed.
   - **Hostinger VPS (migração futura)**: Next.js via `pm2` + Nginx como reverse proxy + PostgreSQL local.
   - **Build Command na Vercel**: `prisma generate && next build` (geração do Prisma Client antes do bundle).
