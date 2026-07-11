@@ -94,6 +94,54 @@ export default function BlingImportPage() {
     }));
   };
 
+  // Mapeamento padrão de um produto do Bling para a tipagem local
+  const mapBlingToLocalProduct = (bp: any): Product => {
+    return {
+      id: bp.id.replace('bling-', 'prod-bling-') + '-' + Date.now().toString().slice(-4),
+      category: bp.category === 'Sacos Zip Lock' ? 'zip' : bp.category === 'Sacos a Vácuo' ? 'vacuo' : 'pe',
+      name: bp.name,
+      description: bp.description,
+      fullDescription: bp.description + ' Embalagem técnica importada do ERP Bling. Desenvolvida para alta resistência e excelente proteção de mercadorias B2B/B2C.',
+      price: bp.price,
+      originalPrice: bp.originalPrice,
+      discount: bp.originalPrice && bp.originalPrice > bp.price ? Math.round(((bp.originalPrice - bp.price) / bp.originalPrice) * 100) : 0,
+      badge: bp.originalPrice && bp.originalPrice > bp.price ? 'OFERTA ERP' : '',
+      stock: bp.stock,
+      minStock: bp.minStock || 10,
+      status: bp.status,
+      sales: 0,
+      freeShipping: false,
+      installments: getInstallments(bp.price),
+      imageType: bp.category === 'Sacos Zip Lock' ? 'zip' : bp.category === 'Sacos a Vácuo' ? 'vacuo' : 'pe-grosso',
+      image: bp.image,
+      sku: bp.sku,
+      width: bp.width.replace('cm', ''),
+      height: bp.height.replace('cm', ''),
+      thickness: bp.thickness.replace(' micras', ''),
+      material: bp.material,
+      prodWeight: bp.pkgWeight / 100, // peso aproximado unitário
+      pkgWidth: bp.pkgWidth,
+      pkgHeight: bp.pkgHeight,
+      pkgLength: bp.pkgLength,
+      pkgWeight: bp.pkgWeight,
+      
+      // Suporte a variações importadas do Bling ERP
+      hasVariations: bp.hasVariations || false,
+      attributes: bp.attributes || [{ name: 'Tamanho', options: [] }],
+      variations: bp.variations || [],
+      
+      specifications: {
+        'Material': bp.material,
+        'Espessura': bp.thickness,
+        'Largura': bp.width,
+        'Comprimento': bp.height,
+        'Código SKU': bp.sku,
+        'Origem': 'Importado do Bling ERP',
+        'Indicação': bp.recommendation
+      }
+    };
+  };
+
   // Função para executar a importação dos produtos selecionados
   const handleImport = () => {
     const toImport = products.filter(p => selectedIds[p.id]);
@@ -106,60 +154,19 @@ export default function BlingImportPage() {
       const localProducts = getProducts();
       let importedCount = 0;
       let updatedCount = 0;
-
       const updatedList = [...localProducts];
 
       toImport.forEach((bp: any) => {
         const index = updatedList.findIndex(p => p.sku === bp.sku);
-        
-        // Mapeia para a tipagem rigorosa do banco local do e-commerce
-        const mapped: Product = {
-          id: bp.id.replace('bling-', 'prod-bling-') + '-' + Date.now().toString().slice(-4),
-          category: bp.category === 'Sacos Zip Lock' ? 'zip' : bp.category === 'Sacos a Vácuo' ? 'vacuo' : 'pe',
-          name: bp.name,
-          description: bp.description,
-          fullDescription: bp.description + ' Embalagem técnica importada do ERP Bling. Desenvolvida para alta resistência e excelente proteção de mercadorias.',
-          price: bp.price,
-          originalPrice: bp.originalPrice,
-          discount: bp.originalPrice && bp.originalPrice > bp.price ? Math.round(((bp.originalPrice - bp.price) / bp.originalPrice) * 100) : 0,
-          badge: bp.originalPrice && bp.originalPrice > bp.price ? 'OFERTA ERP' : '',
-          stock: bp.stock,
-          minStock: bp.minStock || 10,
-          status: bp.status,
-          sales: 0,
-          freeShipping: false,
-          installments: getInstallments(bp.price),
-          imageType: bp.category === 'Sacos Zip Lock' ? 'zip' : bp.category === 'Sacos a Vácuo' ? 'vacuo' : 'pe-grosso',
-          image: bp.image,
-          sku: bp.sku,
-          width: bp.width.replace('cm', ''),
-          height: bp.height.replace('cm', ''),
-          thickness: bp.thickness.replace(' micras', ''),
-          material: bp.material,
-          prodWeight: bp.pkgWeight / 100, // peso aproximado unitário
-          pkgWidth: bp.pkgWidth,
-          pkgHeight: bp.pkgHeight,
-          pkgLength: bp.pkgLength,
-          pkgWeight: bp.pkgWeight,
-          specifications: {
-            'Material': bp.material,
-            'Espessura': bp.thickness,
-            'Largura': bp.width,
-            'Comprimento': bp.height,
-            'Código SKU': bp.sku,
-            'Origem': 'Importado do Bling ERP',
-            'Indicação': bp.recommendation
-          }
-        };
+        const mapped = mapBlingToLocalProduct(bp);
 
         if (index >= 0) {
-          // Atualiza produto existente mantendo o ID interno
+          // Atualiza mantendo o ID interno
           mapped.id = updatedList[index].id;
-          mapped.sales = updatedList[index].sales; // preserva vendas locais
+          mapped.sales = updatedList[index].sales;
           updatedList[index] = mapped;
           updatedCount++;
         } else {
-          // Adiciona novo
           updatedList.push(mapped);
           importedCount++;
         }
@@ -178,6 +185,73 @@ export default function BlingImportPage() {
     }
   };
 
+  // Função para importar TODO o catálogo do Bling ERP de uma vez só
+  const handleImportAll = async () => {
+    if (!confirm('Deseja realmente clonar TODO o catálogo do Bling ERP? Isso substituirá dados locais de produtos com o mesmo SKU.')) {
+      return;
+    }
+
+    setLoadingProducts(true);
+    setMessage(null);
+
+    try {
+      // 1. Busca todos os produtos do Bling sequencialmente no backend
+      const res = await fetch('/api/bling/produtos?tudo=true');
+      if (res.status === 401) {
+        setConnected(false);
+        throw new Error('Sessão expirada no Bling. Por favor, conecte novamente.');
+      }
+      
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao carregar os produtos do Bling.');
+      }
+
+      const allBlingProducts = data.products || [];
+      if (allBlingProducts.length === 0) {
+        throw new Error('Nenhum produto encontrado no Bling ERP.');
+      }
+
+      // 2. Importa e mapeia para o catálogo local
+      const localProducts = getProducts();
+      let importedCount = 0;
+      let updatedCount = 0;
+      const updatedList = [...localProducts];
+
+      allBlingProducts.forEach((bp: any) => {
+        const index = updatedList.findIndex(p => p.sku === bp.sku);
+        const mapped = mapBlingToLocalProduct(bp);
+
+        if (index >= 0) {
+          mapped.id = updatedList[index].id;
+          mapped.sales = updatedList[index].sales;
+          updatedList[index] = mapped;
+          updatedCount++;
+        } else {
+          updatedList.push(mapped);
+          importedCount++;
+        }
+      });
+
+      // 3. Salva no banco de dados local (localStorage)
+      saveProducts(updatedList);
+      loadExistingProducts();
+      
+      // Se estiver na primeira página de listagem, recarrega para atualizar
+      fetchBlingProducts(page);
+
+      setMessage({
+        text: `✓ Importação Completa Concluída! ${importedCount} novos produtos adicionados e ${updatedCount} atualizados a partir do Bling ERP.`,
+        type: 'success'
+      });
+      setSelectedIds({});
+    } catch (err: any) {
+      setMessage({ text: `Falha na importação total: ${err.message}`, type: 'error' });
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
   return (
     <>
       <div className="admin-topbar">
@@ -187,14 +261,23 @@ export default function BlingImportPage() {
             ⬅ Voltar aos Anúncios
           </Link>
           {connected && (
-            <button
-              onClick={handleImport}
-              className="btn btn-primary"
-              disabled={Object.values(selectedIds).filter(Boolean).length === 0}
-              style={{ padding: '10px 20px', fontSize: '0.9rem', cursor: 'pointer' }}
-            >
-              📥 Importar Selecionados ({Object.values(selectedIds).filter(Boolean).length})
-            </button>
+            <>
+              <button
+                onClick={handleImportAll}
+                className="btn"
+                style={{ padding: '10px 20px', fontSize: '0.9rem', cursor: 'pointer', background: '#334155', color: '#fff', border: 'none', marginRight: 10 }}
+              >
+                📦 Importar Catálogo Completo
+              </button>
+              <button
+                onClick={handleImport}
+                className="btn btn-primary"
+                disabled={Object.values(selectedIds).filter(Boolean).length === 0}
+                style={{ padding: '10px 20px', fontSize: '0.9rem', cursor: 'pointer' }}
+              >
+                📥 Importar Selecionados ({Object.values(selectedIds).filter(Boolean).length})
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -322,9 +405,16 @@ export default function BlingImportPage() {
                             <div style={{ fontWeight: 600, color: 'var(--text-dark)', fontSize: '0.88rem', marginBottom: 2 }}>
                               {bp.name}
                             </div>
-                            <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', background: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>
-                              SKU: {bp.sku}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', background: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: 4 }}>
+                                SKU: {bp.sku}
+                              </span>
+                              {bp.hasVariations && bp.variations?.length > 0 && (
+                                <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>
+                                  🔗 {bp.variations.length} variações
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-medium)' }}>
