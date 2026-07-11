@@ -66,7 +66,7 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
 - **Mix de Produtos Simplificado**: Menu e categorias simplificados para conter apenas as categorias de atuação inicial: "Sacos Plásticos PE", "Sacos Zip Lock" e "Sacos a Vácuo". Foram criados os mocks e ranhuras de imagem específicas para a categoria de sacos a vácuo na loja.
 - **Desenvolvimento Local**: Rodando Next.js localmente na porta 3000 (`npm run dev`).
 - **Infraestrutura de Produção e Deploy**:
-  - **Vercel**: Hospedado com sucesso via Vercel CLI na URL `https://abc-master-site-hop293e7g-vinicius-marinhos-projects.vercel.app`.
+  - **Vercel**: Hospedado com sucesso via Vercel CLI na URL `https://abc-master-site-gs21q1p2e-vinicius-marinhos-projects.vercel.app`.
   - **Render**: Banco de dados PostgreSQL managed.
   - **Hostinger VPS (migração futura)**: Next.js via `pm2` + Nginx como reverse proxy + PostgreSQL local.
   - **Build Command na Vercel**: `prisma generate && next build` (geração do Prisma Client antes do bundle).
