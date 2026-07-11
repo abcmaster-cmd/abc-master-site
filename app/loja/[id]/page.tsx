@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getProducts, getInstallments } from '@/lib/productDatabase';
 import Header from '@/components/Header';
 import { useCart } from '@/contexts/CartContext';
 import { useUser } from '@/contexts/UserContext';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { calculateShippingForCart } from '@/lib/shippingOptimizer';
 
 // Produtos mock sincronizados com a página do catálogo
 const PRODUCTS_DATABASE: Record<string, {
@@ -281,6 +283,71 @@ const LargeProductImageSvg = ({ type }: { type: string }) => {
   );
 };
 
+// SVG de imagem simulada menor para os cards secundários do vendedor e sugestões
+const ProductImageSvg = ({ type }: { type: string }) => {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 220 200" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', background: '#F8F8F8' }}>
+      <rect width="220" height="200" fill="#F8F8F8" />
+      
+      {/* Saco Plástico Traseiro */}
+      <rect x="65" y="45" width="110" height="120" rx="3" fill="#EAEAEA" stroke="#D0D0D0" strokeWidth="1" opacity="0.6"/>
+      
+      {/* Saco Plástico do Meio */}
+      <rect x="60" y="40" width="110" height="120" rx="3" fill="#F0F0F0" stroke="#CCCCCC" strokeWidth="1"/>
+      
+      {/* Saco Plástico Frontal Principal */}
+      <rect x="55" y="35" width="110" height="120" rx="3" fill="#FFFFFF" stroke="#BBBBBB" strokeWidth="1.5"/>
+      
+      {/* Texturas de Plástico Trasparente / Brilho do Saco */}
+      <path d="M65 45L155 135" stroke="#EAEAEA" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
+      <path d="M85 35L165 115" stroke="#F5F5F5" strokeWidth="2.5" strokeLinecap="round" opacity="0.8"/>
+      
+      {/* Detalhes específicos de tipo de produto */}
+      {type === 'zip' && (
+        <>
+          {/* Trilho do Zip Lock */}
+          <line x1="55" y1="48" x2="165" y2="48" stroke="#FF6B00" strokeWidth="3"/>
+          <line x1="55" y1="52" x2="165" y2="52" stroke="#FF6B00" strokeWidth="1" opacity="0.7"/>
+        </>
+      )}
+
+      {type === 'pe-grosso' && (
+        <>
+          {/* Indicador de Espessura Grossa */}
+          <path d="M145 145H155V155" stroke="#FF6B00" strokeWidth="3" fill="none"/>
+          <text x="75" y="145" fill="#888" fontSize="10" fontWeight="bold">0,20 mm</text>
+        </>
+      )}
+
+      {type === 'pe-fino' && (
+        <>
+          {/* Indicador de Espessura Fina */}
+          <text x="75" y="145" fill="#aaa" fontSize="10" fontWeight="bold">0,06 mm</text>
+        </>
+      )}
+
+      {type === 'vacuo' && (
+        <>
+          {/* Saco a vácuo com ranhuras texturizadas */}
+          <path d="M55 55L165 55" stroke="#EAEAEA" strokeWidth="1"/>
+          <path d="M55 75L165 75" stroke="#EEEEEE" strokeWidth="0.5"/>
+          <path d="M55 95L165 95" stroke="#EEEEEE" strokeWidth="0.5"/>
+          <path d="M55 115L165 115" stroke="#EEEEEE" strokeWidth="0.5"/>
+          <path d="M55 135L165 135" stroke="#EEEEEE" strokeWidth="0.5"/>
+          <text x="75" y="145" fill="#FF6B00" fontSize="9" fontWeight="bold">VÁCUO GOFRADO</text>
+        </>
+      )}
+      {type === 'kit' && (
+        <>
+          {/* Ícones extras simulando múltiplos sacos empilhados */}
+          <rect x="110" y="80" width="50" height="60" rx="2" fill="#FFFFFF" stroke="#FF6B00" strokeWidth="1" opacity="0.9"/>
+          <line x1="110" y1="88" x2="160" y2="88" stroke="#FF6B00" strokeWidth="2"/>
+        </>
+      )}
+    </svg>
+  );
+};
+
 export default function ProdutoDetalhePage() {
   const params = useParams();
   const router = useRouter();
@@ -288,7 +355,30 @@ export default function ProdutoDetalhePage() {
   const { user } = useUser();
   
   const id = params.id as string;
-  const product = PRODUCTS_DATABASE[id] || PRODUCTS_DATABASE['saco-pe-50x70']; // Fallback
+  const [product, setProduct] = useState<any>(null);
+  
+  useEffect(() => {
+    if (id) {
+      const list = getProducts();
+      let found = list.find((p: any) => p.id === id);
+      if (!found) {
+        found = PRODUCTS_DATABASE[id] || PRODUCTS_DATABASE['saco-pe-50x70'];
+      }
+      setProduct(found);
+
+      // Sincroniza com o servidor para pegar dados mais recentes de estoque/preço
+      fetch('/api/produtos')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.products) {
+            localStorage.setItem('abc_products', JSON.stringify(data.products));
+            const fresh = data.products.find((p: any) => p.id === id);
+            if (fresh) setProduct(fresh);
+          }
+        })
+        .catch(err => console.warn('Erro ao atualizar produto do servidor:', err));
+    }
+  }, [id]);
   
   const [qty, setQty] = useState(1);
   const [activeImageTab, setActiveImageTab] = useState(0);
@@ -320,70 +410,62 @@ export default function ProdutoDetalhePage() {
     setCepError('');
 
     setTimeout(() => {
-      const firstTwo = cleaned.substring(0, 2);
-      const isSpMetropolitan = ['01', '02', '03', '04', '05', '06', '07', '08', '09'].includes(firstTwo);
+      // Mapear o produto atual com a quantidade selecionada para o otimizador
+      const cartItems = [{
+        id: product.id,
+        name: product.name,
+        quantity: qty
+      }];
 
-      const now = new Date();
-      const isBefore11 = now.getHours() < 11;
+      const rawOptions = calculateShippingForCart(cleaned, cartItems);
 
-      const options = [];
+      const options = rawOptions.map(opt => ({
+        id: opt.id,
+        name: opt.name,
+        deadline: opt.deadline,
+        price: opt.price,
+        description: opt.description
+      }));
 
-      if (isSpMetropolitan) {
-        options.push({
-          id: 'flex',
-          name: 'ABC Master Flex (Motoboy)',
-          deadline: isBefore11 ? 'Chega HOJE (se comprado até 11h)' : 'Chega AMANHÃ (compras após as 11h)',
-          price: 12.90,
-          description: 'Entrega local expressa'
-        });
-
-        options.push({
-          id: 'jadlog_express',
-          name: 'Jadlog Express',
-          deadline: 'Entrega em até 2 dias úteis',
-          price: 18.50
-        });
-
-        options.push({
-          id: 'sedex',
-          name: 'SEDEX (Correios)',
-          deadline: 'Entrega em até 2 dias úteis',
-          price: 21.40
-        });
-
-        options.push({
-          id: 'pac',
-          name: 'PAC (Correios)',
-          deadline: 'Entrega em até 4 dias úteis',
-          price: 14.90
-        });
+      if (options.length === 0) {
+        setCepError('Nenhuma opção de frete disponível para este CEP.');
+        setShippingOptions([]);
       } else {
-        options.push({
-          id: 'sedex',
-          name: 'SEDEX (Correios)',
-          deadline: 'Entrega em até 3 dias úteis',
-          price: 38.10
-        });
-
-        options.push({
-          id: 'jadlog_std',
-          name: 'Jadlog Standard',
-          deadline: 'Entrega em até 5 dias úteis',
-          price: 24.90
-        });
-
-        options.push({
-          id: 'pac',
-          name: 'PAC (Correios)',
-          deadline: 'Entrega em até 7 dias úteis',
-          price: 21.50
-        });
+        setShippingOptions(options);
+        // Memorizar o CEP do usuário no localStorage
+        localStorage.setItem('abc_user_cep', cleaned);
       }
-
-      setShippingOptions(options);
       setCalculating(false);
     }, 450);
   };
+
+  // Efeito para carregar e calcular frete de forma automática caso o CEP já esteja memorizado
+  useEffect(() => {
+    if (!product) return;
+    const savedCep = localStorage.getItem('abc_user_cep');
+    if (savedCep && savedCep.length === 8) {
+      const formatted = `${savedCep.slice(0, 5)}-${savedCep.slice(5, 8)}`;
+      setCep(formatted);
+      
+      const cartItems = [{
+        id: product.id,
+        name: product.name,
+        quantity: qty
+      }];
+      
+      const rawOptions = calculateShippingForCart(savedCep, cartItems);
+      const options = rawOptions.map(opt => ({
+        id: opt.id,
+        name: opt.name,
+        deadline: opt.deadline,
+        price: opt.price,
+        description: opt.description
+      }));
+      if (options.length > 0) {
+        setShippingOptions(options);
+      }
+    }
+  }, [product?.id, qty]);
 
   // Estados de reviews/comentários de clientes
   const [reviews, setReviews] = useState<Array<{ id: string, authorName: string, rating: number, title: string, comment: string, createdAt: string, verified?: boolean }>>([]);
@@ -405,6 +487,7 @@ export default function ProdutoDetalhePage() {
   }, [user]);
 
   useEffect(() => {
+    if (!product) return;
     const cached = localStorage.getItem(`reviews_${product.id}`);
     if (cached) {
       setReviews(JSON.parse(cached));
@@ -440,7 +523,7 @@ export default function ProdutoDetalhePage() {
       setReviews(defaultReviews);
       localStorage.setItem(`reviews_${product.id}`, JSON.stringify(defaultReviews));
     }
-  }, [product.id, product.category]);
+  }, [product?.id, product?.category]);
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -558,6 +641,14 @@ export default function ProdutoDetalhePage() {
     router.push('/checkout');
   };
 
+  if (!product) {
+    return (
+      <div style={{ display: 'flex', height: '80vh', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ fontSize: '1rem', color: '#666', fontWeight: 600 }}>Carregando produto...</p>
+      </div>
+    );
+  }
+
   const integerPart = Math.floor(product.price);
   const centsPart = Math.round((product.price - integerPart) * 100).toString().padStart(2, '0');
 
@@ -595,6 +686,7 @@ export default function ProdutoDetalhePage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 50 }}>
                       {[0, 1, 2].map(idx => {
                         const imgUrl =
+                          product.image ? product.image :
                           product.name.toLowerCase().includes('canela') ? '/saco_canela.png' :
                           product.category === 'pe' ? '/saco_pe.png' :
                           product.category === 'zip' ? '/saco_zip.png' :
@@ -643,6 +735,7 @@ export default function ProdutoDetalhePage() {
                     }}>
                       <img
                         src={
+                          product.image ? product.image :
                           product.name.toLowerCase().includes('canela') ? '/saco_canela.png' :
                           product.category === 'pe' ? '/saco_pe.png' :
                           product.category === 'zip' ? '/saco_zip.png' :
@@ -682,10 +775,6 @@ export default function ProdutoDetalhePage() {
 
                 {/* Lado Direito do Sub-Grid: Informações de Preço, Título e Reputação */}
                 <div>
-                  {/* Condição e Vendidos */}
-                  <div style={{ fontSize: '0.78rem', color: '#666', marginBottom: 4 }}>
-                    Novo | +100 vendidos
-                  </div>
 
                   {/* Título do Produto */}
                   <h1 style={{ fontSize: '1.4rem', fontWeight: 600, color: '#333', lineHeight: 1.25, margin: '0 0 8px 0' }}>
@@ -717,17 +806,85 @@ export default function ProdutoDetalhePage() {
                     </div>
                   </div>
 
-                  {/* Parcelamento e Info Mercado Pago */}
+                  {/* Parcelamento e Meios de Pagamento */}
                   <div style={{ marginBottom: 20 }}>
-                    <p style={{ fontSize: '0.82rem', color: '#00a650', fontWeight: 500, margin: '0 0 6px 0' }}>
-                      em {product.installments}
+                    <p style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: 700, margin: '0 0 6px 0' }}>
+                      em {getInstallments(product.price)}
                     </p>
-                    <span style={{ color: '#2962FF', background: '#E8EAF6', fontSize: '0.72rem', fontWeight: 700, padding: '3px 8px', borderRadius: 3, display: 'inline-block', marginBottom: 10 }}>
-                      20% OFF Saldo no Mercado Pago
-                    </span>
-                    <a href="#" style={{ color: '#3483FA', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none', display: 'block' }}>
-                      Ver meios de pagamento e promoções
-                    </a>
+
+                    {/* Meios de Pagamento estilo referência */}
+                    <div style={{
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: '16px',
+                      marginTop: 14,
+                    }}>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', margin: '0 0 14px 0' }}>
+                        Meios de pagamento
+                      </p>
+
+
+                      {/* Cartões de Crédito */}
+                      <div style={{ marginBottom: 14 }}>
+                        <p style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, margin: '0 0 4px 0' }}>Cartões de crédito</p>
+                        <p style={{ fontSize: '0.72rem', color: '#64748b', margin: '0 0 10px 0' }}>Pague em até 12x!</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                          {/* American Express */}
+                          <div style={{ background: '#006FCF', borderRadius: 6, width: 44, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: '#fff', fontSize: '0.55rem', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1, textAlign: 'center' }}>AMERI<br/>CAN</span>
+                          </div>
+                          {/* ELO */}
+                          <div style={{ background: '#000', borderRadius: 6, width: 44, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="34" height="14" viewBox="0 0 80 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <circle cx="16" cy="16" r="14" fill="#FFCB05"/>
+                              <circle cx="16" cy="16" r="9" fill="#000"/>
+                              <path d="M30 8 Q45 1 55 14" stroke="#00A4E0" strokeWidth="5" fill="none"/>
+                              <path d="M30 24 Q45 31 55 18" stroke="#EF4123" strokeWidth="5" fill="none"/>
+                              <ellipse cx="55" cy="16" rx="11" ry="14" stroke="#009A44" strokeWidth="5" fill="none"/>
+                            </svg>
+                          </div>
+                          {/* Visa */}
+                          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, width: 44, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: '#1A1F71', fontSize: '0.85rem', fontWeight: 900, fontStyle: 'italic', letterSpacing: '-0.02em' }}>VISA</span>
+                          </div>
+                          {/* Mastercard */}
+                          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, width: 44, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="30" height="20" viewBox="0 0 50 32" xmlns="http://www.w3.org/2000/svg">
+                              <circle cx="18" cy="16" r="15" fill="#EB001B"/>
+                              <circle cx="32" cy="16" r="15" fill="#F79E1B"/>
+                              <path d="M25 5 Q32 10 32 16 Q32 22 25 27 Q18 22 18 16 Q18 10 25 5Z" fill="#FF5F00"/>
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 14 }} />
+
+                      {/* Pix */}
+                      <div style={{ marginBottom: 14 }}>
+                        <p style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, margin: '0 0 8px 0' }}>Pix</p>
+                        <svg width="54" height="22" viewBox="0 0 120 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M18 24 L24 18 L30 24 L24 30 Z" fill="#32BCAD"/>
+                          <path d="M10 16 L18 24 L10 32 L2 24 Z" fill="#32BCAD" opacity="0.5"/>
+                          <path d="M30 16 L38 24 L30 32 L22 24 Z" fill="#32BCAD" opacity="0.5"/>
+                          <text x="46" y="31" fontFamily="Arial" fontWeight="800" fontSize="20" fill="#32BCAD">pix</text>
+                        </svg>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid #f1f5f9', marginBottom: 14 }} />
+
+                      {/* Boleto */}
+                      <div>
+                        <p style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, margin: '0 0 8px 0' }}>Boleto bancário</p>
+                        <svg width="52" height="28" viewBox="0 0 100 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          {[0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60,64,68,72,76,80,84,88].map((x, i) => (
+                            <rect key={x} x={x} y="4" width={i % 3 === 0 ? 3 : 2} height="32" fill="#1e293b"/>
+                          ))}
+                          <text x="0" y="48" fontFamily="Arial" fontSize="9" fill="#475569">Boleto</text>
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -739,12 +896,23 @@ export default function ProdutoDetalhePage() {
                 <div style={{ border: '1px solid #EDEDED', borderRadius: 6, overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
                     <tbody>
-                      {Object.entries(product.specifications).map(([key, value], idx) => (
-                        <tr key={key} style={{ background: idx % 2 === 0 ? '#F7F7F7' : '#FFFFFF', borderBottom: '1px solid #EDEDED' }}>
-                          <td style={{ padding: '12px 16px', fontWeight: 600, color: '#333', width: '30%', borderRight: '1px solid #EDEDED' }}>{key}</td>
-                          <td style={{ padding: '12px 16px', color: '#666' }}>{value}</td>
-                        </tr>
-                      ))}
+                      {Object.entries(
+                        product.specifications || {
+                          'Material': product.material || '',
+                          'Indicação': product.recommendation || product.indication || '',
+                          'Largura': product.width ? `${product.width} cm` : '',
+                          'Comprimento': product.height ? `${product.height} cm` : '',
+                          'Espessura': product.thickness ? `${product.thickness} mm` : '',
+                          'Peso Unitário': product.prodWeight ? `${product.prodWeight} kg` : ''
+                        }
+                      )
+                        .filter(([_, val]) => val !== '')
+                        .map(([key, value], idx) => (
+                          <tr key={key} style={{ background: idx % 2 === 0 ? '#F7F7F7' : '#FFFFFF', borderBottom: '1px solid #EDEDED' }}>
+                            <td style={{ padding: '12px 16px', fontWeight: 600, color: '#333', width: '30%', borderRight: '1px solid #EDEDED' }}>{key}</td>
+                            <td style={{ padding: '12px 16px', color: '#666' }}>{value}</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -754,7 +922,7 @@ export default function ProdutoDetalhePage() {
               <div style={{ borderTop: '1px solid #EDEDED', paddingTop: 36, paddingBottom: 16 }}>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#333', marginBottom: 16 }}>Descrição</h2>
                 <p style={{ fontSize: '0.92rem', color: '#666', lineHeight: 1.8, whiteSpace: 'pre-line' }}>
-                  {product.fullDescription}
+                  {product.fullDescription || product.description || 'Nenhuma descrição detalhada informada.'}
                 </p>
               </div>
 
@@ -1130,25 +1298,53 @@ export default function ProdutoDetalhePage() {
                     key={p.id}
                     href={`/loja/${p.id}`}
                     style={{
-                      border: '1px solid #EDEDED', borderRadius: 4, background: '#fff',
-                      padding: 16, textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s',
+                      border: '1px solid #dcdcdc', borderRadius: 6, background: '#fff',
+                      padding: 16, textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', 
+                      transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                       boxSizing: 'border-box'
                     }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = '#FF6B00';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.08)';
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                      const img = e.currentTarget.querySelector('.product-card-image-hover') as HTMLImageElement;
+                      if (img) img.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = '#dcdcdc';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.03)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      const img = e.currentTarget.querySelector('.product-card-image-hover') as HTMLImageElement;
+                      if (img) img.style.transform = 'scale(1)';
+                    }}
                   >
-                    <div style={{ background: '#FFF4EE', height: 140, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                      <span style={{ color: '#FF6B00', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                        {p.id.includes('zip') ? 'ZIP LOCK' : p.id.includes('vacuo') ? 'VÁCUO' : 'PE TRANSPARENTE'}
-                      </span>
+                    <div style={{ height: 140, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden', background: '#F8F8F8', border: '1px solid #EDEDED' }}>
+                      <img
+                        src={
+                          p.name.toLowerCase().includes('canela')
+                            ? '/saco_canela.png'
+                            : p.imageType === 'pe-grosso' || p.imageType === 'pe-fino'
+                            ? '/saco_pe.png'
+                            : p.imageType === 'zip'
+                            ? '/saco_zip.png'
+                            : p.imageType === 'vacuo'
+                            ? '/saco_vacuo.png'
+                            : '/saco_pe.png'
+                        }
+                        alt={p.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }}
+                        className="product-card-image-hover"
+                      />
                     </div>
                     <h3 style={{ fontSize: '0.82rem', fontWeight: 500, color: '#333', marginBottom: 8, height: 32, overflow: 'hidden', lineHeight: 1.3 }}>
                       {p.name}
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', color: '#333', marginBottom: 4 }}>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>R$ {pInteger}</span>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 600, marginTop: 1, marginLeft: 1 }}>{pCents}</span>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', color: '#1e293b', marginBottom: 4 }}>
+                      <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>R$ {pInteger}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, marginTop: 1, marginLeft: 1 }}>{pCents}</span>
                     </div>
-                    <span style={{ fontSize: '0.74rem', color: '#00a650', fontWeight: 600 }}>
-                      {p.freeShipping ? 'Frete grátis' : 'Frete a calcular'}
+                    <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>
+                      Frete a calcular
                     </span>
                   </Link>
                 );
@@ -1199,8 +1395,8 @@ export default function ProdutoDetalhePage() {
           </div>
 
           {/* Dados Legais e Direitos Autorais */}
-          <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#999', lineHeight: 1.6, width: '100%' }}>
-            <p style={{ margin: '0 0 4px 0' }}>Copyright © 1999-2026 ABC Master Embalagens LTDA.</p>
+          <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#475569', lineHeight: 1.6, width: '100%' }}>
+            <p style={{ margin: '0 0 4px 0', fontWeight: 500 }}>Copyright © 1999-2026 ABC Master Embalagens LTDA.</p>
             <p style={{ margin: 0 }}>
               CNPJ n.º 63.570.152/0001-40 / Rua Pastor Rubens Lopes, 55, Piraporinha, Diadema/SP - CEP 09950-190 - empresa do grupo NZB Embalagens.
             </p>

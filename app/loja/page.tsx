@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getProducts, getInstallments } from '@/lib/productDatabase';
 import Header from '@/components/Header';
 import { useCart } from '@/contexts/CartContext';
 import Link from 'next/link';
@@ -204,11 +205,52 @@ function ProductCard({ product }: { product: typeof MOCK_PRODUCTS[0] }) {
   const centsPart = Math.round((product.price - integerPart) * 100).toString().padStart(2, '0');
 
   return (
-    <div className="shop-product-card" style={{ border: '1px solid #E6E6E6', borderRadius: 4, background: '#fff', display: 'flex', flexDirection: 'column', transition: 'border-color 0.2s', overflow: 'hidden' }}>
+    <div className="shop-product-card" style={{ 
+      border: '1px solid #dcdcdc', 
+      borderRadius: 6, 
+      background: '#fff', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      transition: 'all 0.2s', 
+      overflow: 'hidden',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+    }}
+    onMouseEnter={e => {
+      e.currentTarget.style.borderColor = '#FF6B00';
+      e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.08)';
+      e.currentTarget.style.transform = 'translateY(-3px)';
+      const img = e.currentTarget.querySelector('.product-card-image-hover') as HTMLImageElement;
+      if (img) img.style.transform = 'scale(1.05)';
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.borderColor = '#dcdcdc';
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.03)';
+      e.currentTarget.style.transform = 'translateY(0)';
+      const img = e.currentTarget.querySelector('.product-card-image-hover') as HTMLImageElement;
+      if (img) img.style.transform = 'scale(1)';
+    }}
+    >
       <Link href={`/loja/${product.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Imagem do Produto */}
-        <div style={{ position: 'relative', width: '100%' }}>
-          <ProductImageSvg type={product.imageType} />
+        {/* Imagem do Produto Real (PNG) */}
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', background: '#F8F8F8', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #f1f5f9' }}>
+          <img
+            src={
+              product.image
+                ? product.image
+                : product.name.toLowerCase().includes('canela')
+                ? '/saco_canela.png'
+                : product.imageType === 'pe-grosso' || product.imageType === 'pe-fino' || product.category === 'pe'
+                ? '/saco_pe.png'
+                : product.imageType === 'zip' || product.category === 'zip'
+                ? '/saco_zip.png'
+                : product.imageType === 'vacuo' || product.category === 'vacuo'
+                ? '/saco_vacuo.png'
+                : '/saco_pe.png'
+            }
+            alt={product.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '12px', transition: 'transform 0.3s' }}
+            className="product-card-image-hover"
+          />
         </div>
 
         {/* Conteúdo Informativo */}
@@ -246,21 +288,14 @@ function ProductCard({ product }: { product: typeof MOCK_PRODUCTS[0] }) {
 
           {/* Parcelamento */}
           <p style={{ fontSize: '0.76rem', color: '#00a650', marginBottom: 6, fontWeight: 500 }}>
-            {product.installments}
+            {getInstallments(product.price)}
           </p>
 
-          {/* Tag de Destaque Mercado Pago */}
-          {product.mercadoPagoPromo ? (
-            <span style={{ color: '#2962FF', background: '#E8EAF6', fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: 3, width: 'fit-content', marginBottom: 8 }}>
-              20% OFF Saldo no Mercado Pago
-            </span>
-          ) : (
-            <div style={{ height: 20 }} /> // Manter alinhamento
-          )}
 
-          {/* Envio / Frete Grátis */}
-          <p style={{ fontSize: '0.78rem', color: '#00a650', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto', marginBottom: 6 }}>
-            {product.freeShipping ? 'Frete grátis' : <span style={{ color: '#777', fontWeight: 500 }}>Frete a calcular</span>}
+
+          {/* Envio / Frete a Calcular */}
+          <p style={{ fontSize: '0.78rem', color: '#777', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto', marginBottom: 6 }}>
+            Frete a calcular
           </p>
 
         </div>
@@ -270,11 +305,11 @@ function ProductCard({ product }: { product: typeof MOCK_PRODUCTS[0] }) {
 }
 
 export default function LojaPage() {
+  const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
   
   // Filtros Avançados estilo Mercado Livre
-  const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
   const [activePriceRange, setActivePriceRange] = useState({ min: 0, max: Infinity });
   
@@ -286,20 +321,31 @@ export default function LojaPage() {
       const q = params.get('q');
       if (cat) setSelectedCat(cat);
       if (q) setSearch(q);
+      
+      setProducts(getProducts());
+
+      // Sincroniza catálogo atualizado com o servidor (ex: estoques sincronizados por webhook)
+      fetch('/api/produtos')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.products) {
+            setProducts(data.products);
+            localStorage.setItem('abc_products', JSON.stringify(data.products));
+          }
+        })
+        .catch(err => console.warn('Erro ao atualizar vitrine com o servidor:', err));
     }
   }, []);
 
-  const filtered = MOCK_PRODUCTS.filter(p => {
+  const filtered = products.filter(p => {
     // Busca por texto
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.description.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = (p.name || '').toLowerCase().includes(search.toLowerCase()) || (p.description || '').toLowerCase().includes(search.toLowerCase());
     // Filtro por Categoria
     const matchCat = selectedCat === 'all' || p.category === selectedCat;
-    // Filtro por Frete Grátis
-    const matchShipping = !onlyFreeShipping || p.freeShipping;
     // Filtro por Faixa de Preço Manual
     const matchPrice = p.price >= activePriceRange.min && p.price <= activePriceRange.max;
 
-    return matchSearch && matchCat && matchShipping && matchPrice;
+    return matchSearch && matchCat && matchPrice;
   });
 
   const handleApplyPrice = (e: React.FormEvent) => {
@@ -317,7 +363,6 @@ export default function LojaPage() {
   const clearFilters = () => {
     setSearch('');
     setSelectedCat('all');
-    setOnlyFreeShipping(false);
     setPriceRange({ min: '', max: '' });
     setActivePriceRange({ min: 0, max: Infinity });
   };
@@ -341,30 +386,7 @@ export default function LojaPage() {
                 <span style={{ fontSize: '0.8rem', color: '#666' }}>{filtered.length} resultados</span>
               </div>
 
-              {/* Filtro Switch Frete Grátis */}
-              <div style={{
-                background: '#fff', border: '1px solid #E6E6E6', borderRadius: 6, padding: '12px 16px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24
-              }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>Frete grátis</span>
-                <label style={{ position: 'relative', display: 'inline-block', width: 38, height: 22, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={onlyFreeShipping}
-                    onChange={e => setOnlyFreeShipping(e.target.checked)}
-                    style={{ opacity: 0, width: 0, height: 0 }}
-                  />
-                  <span style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: onlyFreeShipping ? '#FF6B00' : '#ccc',
-                    borderRadius: 22, transition: '0.2s',
-                  }} />
-                  <span style={{
-                    position: 'absolute', content: '""', height: 16, width: 16, left: onlyFreeShipping ? 19 : 3, bottom: 3,
-                    backgroundColor: '#fff', borderRadius: '50%', transition: '0.2s',
-                  }} />
-                </label>
-              </div>
+
 
               {/* Seção Categorias */}
               <div style={{ marginBottom: 24 }}>
@@ -381,8 +403,8 @@ export default function LojaPage() {
                         onClick={() => setSelectedCat(cat.id)}
                         style={{
                           background: 'none', border: 'none', padding: 0, fontSize: '0.82rem',
-                          color: selectedCat === cat.id ? '#FF6B00' : '#666',
-                          fontWeight: selectedCat === cat.id ? 700 : 400,
+                          color: selectedCat === cat.id ? '#FF6B00' : '#334155',
+                          fontWeight: selectedCat === cat.id ? 700 : 500,
                           textAlign: 'left', cursor: 'pointer', outline: 'none'
                         }}
                       >
@@ -398,17 +420,17 @@ export default function LojaPage() {
                 <h3 style={{ fontSize: '0.92rem', fontWeight: 600, color: '#333', marginBottom: 12 }}>Preço</h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                   <li>
-                    <button onClick={() => selectPredefinedPrice(0, 55)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#666', cursor: 'pointer', textAlign: 'left' }}>
+                    <button onClick={() => selectPredefinedPrice(0, 55)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#334155', cursor: 'pointer', textAlign: 'left', fontWeight: 500 }}>
                       Até R$ 55
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => selectPredefinedPrice(55, 90)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#666', cursor: 'pointer', textAlign: 'left' }}>
+                    <button onClick={() => selectPredefinedPrice(55, 90)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#334155', cursor: 'pointer', textAlign: 'left', fontWeight: 500 }}>
                       R$ 55 a R$ 90
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => selectPredefinedPrice(90, Infinity)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#666', cursor: 'pointer', textAlign: 'left' }}>
+                    <button onClick={() => selectPredefinedPrice(90, Infinity)} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.82rem', color: '#334155', cursor: 'pointer', textAlign: 'left', fontWeight: 500 }}>
                       Mais de R$ 90
                     </button>
                   </li>
@@ -422,28 +444,34 @@ export default function LojaPage() {
                     value={priceRange.min}
                     onChange={e => setPriceRange(prev => ({ ...prev, min: e.target.value }))}
                     style={{
-                      width: 75, padding: '6px 8px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4,
+                      width: 75, padding: '6px 8px', fontSize: '0.8rem', border: '1px solid #94a3b8', borderRadius: 4,
                       background: '#fff', color: '#333', outline: 'none'
                     }}
+                    onFocus={e => e.target.style.borderColor = '#FF6B00'}
+                    onBlur={e => e.target.style.borderColor = '#94a3b8'}
                   />
-                  <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
+                  <span style={{ color: '#64748b', fontSize: '0.8rem' }}>—</span>
                   <input
                     type="number"
                     placeholder="Máximo"
                     value={priceRange.max}
                     onChange={e => setPriceRange(prev => ({ ...prev, max: e.target.value }))}
                     style={{
-                      width: 75, padding: '6px 8px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4,
+                      width: 75, padding: '6px 8px', fontSize: '0.8rem', border: '1px solid #94a3b8', borderRadius: 4,
                       background: '#fff', color: '#333', outline: 'none'
                     }}
+                    onFocus={e => e.target.style.borderColor = '#FF6B00'}
+                    onBlur={e => e.target.style.borderColor = '#94a3b8'}
                   />
                   <button
                     type="submit"
                     style={{
-                      width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '1px solid #ccc',
+                      width: 28, height: 28, borderRadius: '50%', background: '#fff', border: '1px solid #94a3b8',
                       color: '#FF6B00', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold'
+                      cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', transition: 'all 0.15s'
                     }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#FF6B00'; e.currentTarget.style.background = '#FFF8F4'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#94a3b8'; e.currentTarget.style.background = '#fff'; }}
                   >
                     ›
                   </button>
@@ -451,7 +479,7 @@ export default function LojaPage() {
               </div>
 
               {/* Botão de Redefinir Filtros */}
-              {(search || selectedCat !== 'all' || onlyFreeShipping || priceRange.min || priceRange.max) && (
+              {(search || selectedCat !== 'all' || priceRange.min || priceRange.max) && (
                 <button
                   onClick={clearFilters}
                   style={{

@@ -30,6 +30,18 @@ export default function NovoAnuncioPage() {
   const [minStock, setMinStock] = useState('10');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState(''); // Novo estado de imagem (Base64 / WebP)
+
+  // Vínculo com o Bling ERP para produto simples
+  const [blingProductId, setBlingProductId] = useState('');
+  const [blingProductSku, setBlingProductSku] = useState('');
+  const [blingProductName, setBlingProductName] = useState('');
+
+  // Busca e modal para o Bling ERP
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedVariationIdx, setSelectedVariationIdx] = useState<number>(-1);
+  const [isBlingModalOpen, setIsBlingModalOpen] = useState(false);
   
   // Especificações Técnicas do Produto
   const [width, setWidth] = useState(''); // Largura do Produto (cm)
@@ -170,6 +182,68 @@ export default function NovoAnuncioPage() {
     setVariations(updated);
   };
 
+  // --- Métodos de Vínculo com Bling ERP ---
+  const searchBlingProducts = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/bling/search?q=${encodeURIComponent(searchQuery)}`);
+      const data = await res.json();
+      setSearchResults(data.products || []);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao buscar dados no Bling.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const linkBlingProduct = (bp: any) => {
+    if (selectedVariationIdx === -1) {
+      // Vincula ao produto simples principal
+      setBlingProductId(bp.id);
+      setBlingProductSku(bp.sku);
+      setBlingProductName(bp.name);
+    } else {
+      // Vincula a uma variação específica da tabela
+      const updated = [...variations];
+      updated[selectedVariationIdx] = {
+        ...updated[selectedVariationIdx],
+        blingProductId: bp.id,
+        blingProductSku: bp.sku,
+        blingProductName: bp.name
+      };
+      setVariations(updated);
+    }
+    setIsBlingModalOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const unlinkBlingProduct = (variationIdx: number = -1) => {
+    if (variationIdx === -1) {
+      setBlingProductId('');
+      setBlingProductSku('');
+      setBlingProductName('');
+    } else {
+      const updated = [...variations];
+      updated[variationIdx] = {
+        ...updated[variationIdx],
+        blingProductId: undefined,
+        blingProductSku: undefined,
+        blingProductName: undefined
+      };
+      setVariations(updated);
+    }
+  };
+
+  const openBlingLinkModal = (variationIdx: number = -1) => {
+    setSelectedVariationIdx(variationIdx);
+    setIsBlingModalOpen(true);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -239,8 +313,14 @@ export default function NovoAnuncioPage() {
         pkgHeight: parsePrice(pkgHeight),
         pkgLength: parsePrice(pkgLength),
         pkgWeight: parsePrice(pkgWeight),
+        
         hasVariations,
         variations: cleanVariations,
+        
+        // Vínculo com Bling ERP
+        blingProductId: hasVariations ? undefined : blingProductId || undefined,
+        blingProductSku: hasVariations ? undefined : blingProductSku || undefined,
+        
         installments: getInstallments(parsePrice(price)),
         freeShipping: false
       };
@@ -532,6 +612,45 @@ export default function NovoAnuncioPage() {
             </div>
           </div>
 
+          {/* Seção Vínculo com Bling ERP (Apenas para produto simples) */}
+          {!hasVariations && (
+            <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <h3 style={{ marginBottom: 12, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>
+                🔗 Vínculo com Estoque Físico (Bling ERP)
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 16 }}>
+                Vincule este anúncio comercial a um produto físico cadastrado no seu Bling para sincronização automática de estoque.
+              </p>
+              {blingProductSku ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', background: '#E6F4EA', border: '1px solid #A3E2AB', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#137333', display: 'block' }}>✓ Vinculado com sucesso</span>
+                    <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#333' }}>{blingProductName}</span>
+                    <span style={{ fontSize: '0.78rem', color: '#666', display: 'block', fontFamily: 'monospace', marginTop: 2 }}>SKU Bling: {blingProductSku}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => unlinkBlingProduct(-1)}
+                    style={{ padding: '6px 12px', background: '#fff', border: '1px solid #C5221F', color: '#C5221F', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                  >
+                    Desvincular
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: '0.85rem', color: '#888', fontStyle: 'italic' }}>Nenhum produto físico do Bling vinculado a este anúncio.</span>
+                  <button
+                    type="button"
+                    onClick={() => openBlingLinkModal(-1)}
+                    style={{ padding: '8px 16px', background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+                  >
+                    🔗 Vincular Produto do Bling
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Tabela combinatória de Variações */}
           {hasVariations && variations.length > 0 && (
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
@@ -581,7 +700,8 @@ export default function NovoAnuncioPage() {
                     <th>SKU da Variação *</th>
                     <th>Preço (R$) *</th>
                     <th>Estoque *</th>
-                    <th style={{ paddingRight: 14 }}>Est. Mínimo</th>
+                    <th>Est. Mínimo</th>
+                    <th style={{ paddingRight: 14 }}>Vínculo Bling</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -621,7 +741,7 @@ export default function NovoAnuncioPage() {
                           required
                         />
                       </td>
-                      <td style={{ paddingRight: 14 }}>
+                      <td>
                         <input
                           type="number"
                           value={v.minStock}
@@ -630,6 +750,30 @@ export default function NovoAnuncioPage() {
                           style={{ width: '80%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4 }}
                           required
                         />
+                      </td>
+                      <td style={{ paddingRight: 14 }}>
+                        {v.blingProductSku ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: '0.72rem', background: '#E6F4EA', color: '#137333', padding: '4px 6px', borderRadius: 4, fontWeight: 700, whiteSpace: 'nowrap' }} title={v.blingProductName}>
+                              ✓ {v.blingProductSku}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => unlinkBlingProduct(idx)}
+                              style={{ background: 'none', border: 'none', color: '#C5221F', cursor: 'pointer', padding: 0, fontSize: '0.78rem' }}
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openBlingLinkModal(idx)}
+                            style={{ background: 'none', border: '1px solid #FF6B00', color: '#FF6B00', padding: '4px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}
+                          >
+                            🔗 Vincular Bling
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -783,6 +927,78 @@ export default function NovoAnuncioPage() {
           </div>
 
         </form>
+
+        {/* Modal de Vínculo com o Bling ERP */}
+        {isBlingModalOpen && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center',
+            alignItems: 'center', zIndex: 1000, fontFamily: 'sans-serif'
+          }}>
+            <div style={{
+              background: '#fff', borderRadius: 8, padding: 24, width: '90%', maxWidth: 500,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: 16
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: 10 }}>
+                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+                  {selectedVariationIdx === -1 
+                    ? 'Vincular Anúncio ao Bling ERP' 
+                    : `Vincular Variação "${variations[selectedVariationIdx]?.name}" ao Bling`}
+                </h4>
+                <button 
+                  type="button" 
+                  onClick={() => setIsBlingModalOpen(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#999' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input 
+                  type="text" 
+                  placeholder="Busque por Nome ou SKU físico no Bling..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{ flex: 1, padding: '8px 12px', border: '1px solid #ccc', borderRadius: 4, fontSize: '0.88rem' }}
+                  onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); searchBlingProducts(); } }}
+                />
+                <button 
+                  type="button"
+                  onClick={searchBlingProducts}
+                  disabled={searching}
+                  style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}
+                >
+                  {searching ? 'Buscando...' : 'Buscar'}
+                </button>
+              </div>
+
+              <div style={{ maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {searchResults.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#888', fontSize: '0.85rem', margin: '20px 0' }}>
+                    {searching ? 'Pesquisando produtos no Bling...' : 'Digite algo e clique em buscar.'}
+                  </p>
+                ) : (
+                  searchResults.map((bp: any) => (
+                    <div key={bp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid #f0f0f0', borderRadius: 6, background: '#fafafa' }}>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#333' }}>{bp.name}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#666', fontFamily: 'monospace', marginTop: 2 }}>SKU Bling: {bp.sku || 'Sem SKU'} | Estoque: {bp.stock} un</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => linkBlingProduct(bp)}
+                        style={{ padding: '6px 12px', background: '#FF6B00', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                      >
+                        Vincular
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

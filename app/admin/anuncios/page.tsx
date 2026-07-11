@@ -14,8 +14,21 @@ export default function ShopeeAnunciosPage() {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    setProducts(getProducts());
+    // Carrega o cache inicial local imediatamente
+    const localProducts = getProducts();
+    setProducts(localProducts);
     setInitialized(true);
+
+    // Sincroniza com as alterações do servidor em tempo real (ex: webhook)
+    fetch('/api/produtos')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.products) {
+          setProducts(data.products);
+          localStorage.setItem('abc_products', JSON.stringify(data.products));
+        }
+      })
+      .catch(err => console.warn('Erro ao sincronizar anúncios com o servidor:', err));
   }, []);
 
   useEffect(() => {
