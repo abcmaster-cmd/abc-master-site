@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ConfigPage() {
   const [activeTab, setActiveTab] = useState<'empresa' | 'integracoes' | 'frete'>('empresa');
+  const [blingConnected, setBlingConnected] = useState<boolean>(false);
+  const [loadingBling, setLoadingBling] = useState<boolean>(true);
 
   // Estado das configurações
   const [razaoSocial, setRazaoSocial] = useState('ABC Master Embalagens Ltda');
@@ -24,6 +26,22 @@ export default function ConfigPage() {
   const [pacActive, setPacActive] = useState(true);
   const [sedexActive, setSedexActive] = useState(true);
   const [jadlogActive, setJadlogActive] = useState(true);
+
+  useEffect(() => {
+    async function checkBling() {
+      try {
+        const res = await fetch('/api/bling/status');
+        const data = await res.json();
+        setBlingConnected(data.conectado);
+      } catch (err) {
+        console.error(err);
+        setBlingConnected(false);
+      } finally {
+        setLoadingBling(false);
+      }
+    }
+    checkBling();
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,13 +145,53 @@ export default function ConfigPage() {
                 <div>
                   <h3 style={{ marginBottom: 20, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-dark)' }}>Tokens de Integração e APIs</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    <div className="form-group">
-                      <label style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Token Bling ERP (API v3)</span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 600 }}>✓ Conectado</span>
-                      </label>
-                      <input type="password" value={blingToken} onChange={e => setBlingToken(e.target.value)} style={{ fontFamily: 'monospace' }} />
-                    </div>
+                     <div className="form-group" style={{ background: '#fcfcfc', border: '1px solid #eee', padding: 20, borderRadius: 8 }}>
+                       <label style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <span>Integração Bling ERP (API v3)</span>
+                         {loadingBling ? (
+                           <span style={{ fontSize: '0.72rem', color: '#666', fontWeight: 600 }}>Verificando...</span>
+                         ) : blingConnected ? (
+                           <span style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 600, background: '#E6F4EA', padding: '4px 8px', borderRadius: 4 }}>✓ Conectado</span>
+                         ) : (
+                           <span style={{ fontSize: '0.72rem', color: 'var(--danger)', fontWeight: 600, background: '#FCE8E6', padding: '4px 8px', borderRadius: 4 }}>✗ Desconectado</span>
+                         )}
+                       </label>
+                       
+                       <p style={{ fontSize: '0.78rem', color: '#666', marginBottom: 16, lineHeight: '1.4' }}>
+                         A conexão com o Bling ERP utiliza o protocolo OAuth 2.0 para segurança. O e-commerce sincronizará os dados do seu estoque e as especificações técnicas de forma automática.
+                       </p>
+
+                       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                         <a 
+                           href="/api/bling/auth" 
+                           className="btn" 
+                           style={{ 
+                             padding: '8px 16px', 
+                             fontSize: '0.8rem', 
+                             fontWeight: 600,
+                             background: blingConnected ? '#f1f5f9' : '#FF6B00',
+                             color: blingConnected ? '#334155' : '#fff',
+                             border: blingConnected ? '1px solid #cbd5e1' : 'none',
+                             textDecoration: 'none',
+                             display: 'inline-flex',
+                             alignItems: 'center',
+                             borderRadius: 4
+                           }}
+                         >
+                           {blingConnected ? '🔄 Reconectar Conta do Bling' : '🔗 Conectar Conta do Bling'}
+                         </a>
+                         
+                         {blingConnected && (
+                           <Link 
+                             href="/admin/bling-import" 
+                             className="btn btn-primary"
+                             style={{ padding: '8px 16px', fontSize: '0.8rem', background: '#334155', color: '#fff', textDecoration: 'none', borderRadius: 4 }}
+                           >
+                             📥 Clonar Produtos
+                           </Link>
+                         )}
+                       </div>
+                     </div>
                     <div className="form-group">
                       <label style={{ fontWeight: 600 }}>Mercado Pago Public Key</label>
                       <input type="text" value={mpPublicKey} onChange={e => setMpPublicKey(e.target.value)} style={{ fontFamily: 'monospace' }} />
