@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
               codigo: cpfOrCnpjLimpo,
               tipo: isCorporate ? 'J' : 'F', // F = Fisica, J = Juridica na v3
               situacao: 'A', // A = Ativo
-              cpf_cnpj: cpfOrCnpjLimpo,
+              numeroDocumento: cpfOrCnpjLimpo,
               telefone: address?.phone || '',
               email: email,
               endereco: {
