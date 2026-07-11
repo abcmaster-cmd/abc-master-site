@@ -37,6 +37,8 @@ interface OrderDetails {
   trackingCode?: string;
   items: OrderItem[];
   timeline: { time: string; text: string; desc?: string }[];
+  blingOrderId?: string;
+  blingError?: any;
 }
 
 const MOCK_ORDERS_DETAILS: Record<string, OrderDetails> = {
@@ -214,6 +216,56 @@ export default function OrderDetailsPage() {
 
   useEffect(() => {
     if (orderId) {
+      // 1. Tentar ler do localStorage (abc_orders)
+      const localOrdersStr = localStorage.getItem('abc_orders');
+      if (localOrdersStr) {
+        try {
+          const localOrders = JSON.parse(localOrdersStr);
+          const found = localOrders.find((o: any) => o.id === orderId);
+          if (found) {
+            const mapped: OrderDetails = {
+              id: found.id,
+              customerName: found.customer,
+              email: found.email,
+              phone: found.phone || '(11) 99999-9999',
+              doc: found.cpf || '',
+              docType: (found.cpf || '').replace(/\D/g, '').length > 11 ? 'CNPJ' : 'CPF',
+              status: found.status || 'approved',
+              paymentMethod: found.paymentMethod || 'PIX',
+              paymentDetails: `Transação simulada do gateway de pagamento para o pedido #${found.id}`,
+              subtotal: found.total - (found.shipping || 0),
+              shippingCost: found.shipping || 0,
+              discount: 0,
+              total: found.total,
+              carrier: 'Correios Express',
+              address: 'Endereço fornecido no checkout',
+              date: found.date || new Date().toLocaleString('pt-BR'),
+              nfeEmitida: found.nfe || false,
+              etiquetaGerada: found.label || false,
+              blingOrderId: found.blingOrderId,
+              blingError: found.blingError,
+              items: found.items ? found.items.map((item: any, idx: number) => ({
+                id: String(idx + 1),
+                name: item.name,
+                sku: item.sku || 'SKU-PROD',
+                price: item.price,
+                qty: item.qty,
+                imageColor: '#E5E7EB'
+              })) : [],
+              timeline: [
+                { time: found.date || new Date().toLocaleString('pt-BR'), text: 'Pedido finalizado e registrado', desc: 'Realizado na loja online' }
+              ]
+            };
+            setOrder(mapped);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('Erro ao ler ordem local:', err);
+        }
+      }
+
+      // 2. Fallback para os MOCK_ORDERS_DETAILS
       const details = MOCK_ORDERS_DETAILS[orderId];
       if (details) {
         setOrder(details);
@@ -326,6 +378,30 @@ export default function OrderDetailsPage() {
       </div>
 
       <div className="admin-content" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, background: '#f0f4f8', minHeight: 'calc(100vh - 72px)' }}>
+        {order.blingError && !order.blingOrderId && (
+          <div style={{
+            gridColumn: '1 / -1',
+            background: '#FDF2F2',
+            border: '1px solid #F8B4B4',
+            borderRadius: 8,
+            padding: 16,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            boxShadow: 'var(--shadow-sm)'
+          }}>
+            <div style={{ fontSize: '1.5rem', marginTop: -2 }}>⚠️</div>
+            <div style={{ textAlign: 'left', width: '100%' }}>
+              <h4 style={{ margin: '0 0 6px 0', color: '#9B1C1C', fontSize: '0.9rem', fontWeight: 700 }}>Falha na Integração Automática com o Bling ERP</h4>
+              <p style={{ margin: '0 0 8px 0', fontSize: '0.8rem', color: '#7F1D1D', lineHeight: 1.4 }}>
+                O pedido foi registrado localmente no site, mas a API v3 do Bling rejeitou a criação do Pedido de Venda com os detalhes abaixo:
+              </p>
+              <div style={{ background: '#FFF', border: '1px solid #E5E7EB', borderRadius: 4, padding: '8px 12px', fontSize: '0.76rem', color: '#374151', fontFamily: 'monospace', whiteSpace: 'pre-wrap', width: '100%', boxSizing: 'border-box' }}>
+                {JSON.stringify(order.blingError, null, 2)}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Lado Esquerdo - Detalhes do Pedido & Produtos */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
