@@ -194,9 +194,10 @@ export default function EditarAnuncioPage() {
   useEffect(() => {
     if (productId) {
       const list = getProducts();
-      let product = list.find((p: any) => p.id === productId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let product: any = list.find((p: any) => p.id === productId);
       if (!product) {
-        product = MOCK_PRODUCTS.find(p => p.id === productId);
+        product = MOCK_PRODUCTS.find(p => p.id === productId) as any;
       }
 
       if (product) {
