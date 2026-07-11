@@ -70,15 +70,23 @@ export async function POST(req: NextRequest) {
         console.log('🔌 Conexão ativa com o Bling localizada. Enviando pedido de venda para o ERP...');
 
         // Formata os itens para o formato do Bling v3
-        // IMPORTANTE: Mapeia o SKU de vínculo do Bling correspondente se existir no item (blingProductSku ou sku)
+        // IMPORTANTE: Se o produto tiver o ID do Bling associado (blingProductId), usamos ele para evitar erros de SKUs/descrições duplicadas.
         const blingItens = items.map((item: any) => {
-          const skuParaBling = item.blingProductSku || item.sku || '';
-          return {
-            codigo: skuParaBling,
-            descricao: item.name,
+          const itemPayload: any = {
             quantidade: parseInt(item.quantity) || 1,
             valor: Number(item.price)
           };
+
+          if (item.blingProductId) {
+            itemPayload.produto = {
+              id: Number(item.blingProductId)
+            };
+          } else {
+            itemPayload.codigo = item.blingProductSku || item.sku || '';
+            itemPayload.descricao = item.name;
+          }
+
+          return itemPayload;
         });
 
         // 1. Verificar se o cliente já existe no Bling ERP pelo CPF/CNPJ, se não, cadastrá-lo
@@ -111,7 +119,7 @@ export async function POST(req: NextRequest) {
             const payloadContato = {
               nome: customerName,
               codigo: cpfOrCnpjLimpo,
-              tipo: isCorporate ? 'Juridica' : 'Física', // Física ou Juridica por extenso na v3
+              tipo: isCorporate ? 'J' : 'F', // F = Fisica, J = Juridica na v3
               situacao: 'A', // A = Ativo
               cpf_cnpj: cpfOrCnpjLimpo,
               telefone: address?.phone || '',
@@ -156,15 +164,29 @@ export async function POST(req: NextRequest) {
           throw new Error('Não foi possível obter ou criar um ID de contato válido no Bling ERP.');
         }
 
+        const hoje = new Date();
+        const dataVenda = hoje.toISOString().split('T')[0]; // AAAA-MM-DD
+
+        const vencimento = new Date();
+        vencimento.setDate(vencimento.getDate() + 1); // +1 dia de vencimento
+        const dataVencimento = vencimento.toISOString().split('T')[0]; // AAAA-MM-DD
+
         // Monta o payload de Venda conforme API v3 do Bling referenciando o ID do contato obtido
         const payloadBling = {
           contato: {
             id: Number(contactId)
           },
+          data: dataVenda,
           itens: blingItens,
           transporte: {
             valorFrete: Number(shippingCost || 0)
           },
+          parcelas: [
+            {
+              dataVencimento: dataVencimento,
+              valor: Number(total)
+            }
+          ],
           observacoes: `Pedido #${idLocal || createdOrderInDb?.id || 'SemID'} integrado automaticamente da Loja Virtual.`
         };
 
