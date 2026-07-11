@@ -171,6 +171,10 @@ export async function POST(req: NextRequest) {
         vencimento.setDate(vencimento.getDate() + 1); // +1 dia de vencimento
         const dataVencimento = vencimento.toISOString().split('T')[0]; // AAAA-MM-DD
 
+        const totalItens = items.reduce((acc: number, item: any) => {
+          return acc + (Number(item.price) * (parseInt(item.quantity) || 1));
+        }, 0);
+
         // Monta o payload de Venda conforme API v3 do Bling referenciando o ID do contato obtido
         const payloadBling = {
           contato: {
@@ -184,7 +188,7 @@ export async function POST(req: NextRequest) {
           parcelas: [
             {
               dataVencimento: dataVencimento,
-              valor: Number(total)
+              valor: Number(totalItens.toFixed(2))
             }
           ],
           observacoes: `Pedido #${idLocal || createdOrderInDb?.id || 'SemID'} integrado automaticamente da Loja Virtual.`
