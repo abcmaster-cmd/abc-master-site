@@ -252,6 +252,57 @@ export default function BlingImportPage() {
     }
   };
 
+  // Limpar todos os vínculos com o Bling ERP
+  const handleClearAllBlingLinks = () => {
+    if (!confirm('Tem certeza de que deseja REMOVER O VÍNCULO de todos os anúncios com o Bling? Os anúncios continuarão existindo na loja virtual, mas a sincronização de estoque via webhook será desativada para todos eles.')) {
+      return;
+    }
+
+    try {
+      const localProducts = getProducts();
+      const updated = localProducts.map(p => {
+        const cleanProduct = {
+          ...p,
+          blingProductId: undefined,
+          blingProductSku: undefined
+        };
+        if (cleanProduct.variations) {
+          cleanProduct.variations = cleanProduct.variations.map(v => ({
+            ...v,
+            blingProductId: undefined,
+            blingProductSku: undefined,
+            blingProductName: undefined
+          }));
+        }
+        return cleanProduct;
+      });
+
+      saveProducts(updated);
+      alert('Vínculos com o Bling ERP removidos de todos os anúncios com sucesso!');
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Erro ao limpar vínculos: ${err.message}`);
+    }
+  };
+
+  // Excluir todos os produtos importados/clonados do Bling
+  const handleRemoveAllBlingClones = () => {
+    if (!confirm('ATENÇÃO: Isso excluirá PERMANENTEMENTE da sua loja virtual todos os anúncios comerciais que foram clonados/importados diretamente do Bling. Deseja continuar?')) {
+      return;
+    }
+
+    try {
+      const localProducts = getProducts();
+      const updated = localProducts.filter(p => !p.id.startsWith('bling-') && !p.id.startsWith('prod-bling-'));
+
+      saveProducts(updated);
+      alert('Todos os anúncios clonados/importados do Bling foram excluídos da loja virtual!');
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Erro ao excluir clones: ${err.message}`);
+    }
+  };
+
   return (
     <>
       <div className="admin-topbar">
@@ -319,6 +370,44 @@ export default function BlingImportPage() {
                 {message.text}
               </div>
             )}
+
+            {/* Painel de Gestão e Limpeza de Catálogo */}
+            <div style={{ 
+              background: '#FFF8F8', 
+              border: '1px solid #FFE0E0', 
+              borderRadius: 8, 
+              padding: '16px 24px', 
+              marginBottom: 20, 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              boxShadow: 'var(--shadow-sm)'
+            }}>
+              <div style={{ textAlign: 'left' }}>
+                <h4 style={{ margin: '0 0 4px 0', color: '#C5221F', fontSize: '0.92rem', fontWeight: 700 }}>⚠️ Zona de Ações Avançadas (Catálogo)</h4>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#666' }}>
+                  Ações rápidas para desvincular o e-commerce ou excluir do site anúncios importados diretamente do Bling.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={handleClearAllBlingLinks}
+                  className="btn"
+                  style={{ padding: '8px 16px', fontSize: '0.8rem', background: '#fff', border: '1px solid #C5221F', color: '#C5221F', cursor: 'pointer', fontWeight: 600, borderRadius: 4 }}
+                >
+                  🔗 Desvincular Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveAllBlingClones}
+                  className="btn"
+                  style={{ padding: '8px 16px', fontSize: '0.8rem', background: '#C5221F', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 600, borderRadius: 4 }}
+                >
+                  ❌ Excluir Clonados
+                </button>
+              </div>
+            </div>
 
             <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
               {/* Barra de Filtros Rápidos / Stats */}

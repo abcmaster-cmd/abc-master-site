@@ -78,7 +78,9 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
   - **Novidades Bling ERP (API v3)**:
     - Implementado suporte completo de **Variações de Produtos** que agrupa automaticamente variações filhas nos produtos pais no mapeamento e importação.
     - Implementada função de **Importar Catálogo Completo** com paginação sequencial automática de todos os produtos do Bling em lote.
-    - Criada a rota de **Webhook do Bling** em `/api/bling/webhook` com validação de assinatura `x-bling-signature-256` (HMAC-SHA256) para receber alterações em tempo real de estoque e dados de produtos.
+    - Criado suporte a **Vínculo Comercial e Mapeamento Resiliente**: permite ligar um anúncio simples comercial ou variações de anúncios comerciais de forma isolada a um SKU físico no Bling ERP via modal de pesquisa de API.
+    - Criada a rota de **Webhook do Bling** em `/api/bling/webhook` com validação de assinatura `x-bling-signature-256` (HMAC-SHA256) para receber alterações em tempo real de estoque e dados de produtos de anúncios e variações amarradas de forma automática.
+    - Adicionados botões e lógica para **Gestão Avançada do Catálogo Bling** na tela de importação: permite desvincular em lote a amarração do Bling de todos os anúncios, ou excluir permanentemente do e-commerce todas as clonagens diretas importadas do Bling.
   - **`.gitignore` atualizado**: `.env.example` agora é rastreado pelo git (referência pública), enquanto `.env.local` e `.env` permanecem ignorados.
   - **Commits e Pushes enviados** para `abcmaster-cmd/abc-master-site` (branch `main`).
 
