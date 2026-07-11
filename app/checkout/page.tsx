@@ -256,6 +256,21 @@ export default function CheckoutPage() {
         if (data.success && data.blingOrderId) {
           blingOrderIdResult = data.blingOrderId;
           console.log('✓ Pedido integrado com sucesso no Bling ERP. ID:', blingOrderIdResult);
+        } else if (data.blingError) {
+          console.error('❌ Falha na integração com o Bling ERP. Detalhes:', data.blingError);
+          try {
+            localStorage.setItem('abc_last_bling_error', JSON.stringify({
+              timestamp: new Date().toISOString(),
+              error: data.blingError,
+              payloadEnviado: {
+                newOrderId,
+                customer: form.name,
+                cpf: customerCpf
+              }
+            }));
+          } catch (e) {
+            console.warn('Erro ao gravar log de erro no localStorage:', e);
+          }
         }
       } catch (apiErr) {
         console.warn('⚠️ Falha ao integrar pedido com o Bling ERP em tempo real:', apiErr);
