@@ -6,6 +6,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useUser } from '@/contexts/UserContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { calculateShippingForCart } from '@/lib/shippingOptimizer';
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -78,12 +79,22 @@ export default function CheckoutPage() {
         }
         if (parsed.cep) {
           setCep(parsed.cep);
+        } else {
+          const savedCep = localStorage.getItem('abc_user_cep');
+          if (savedCep && savedCep.length === 8) {
+            setCep(`${savedCep.slice(0, 5)}-${savedCep.slice(5, 8)}`);
+          }
         }
         if (parsed.isCorporate !== undefined) {
           setIsCorporate(parsed.isCorporate);
         }
         if (parsed.selectedShipping) {
           setSelectedShipping(parsed.selectedShipping);
+        }
+      } else {
+        const savedCep = localStorage.getItem('abc_user_cep');
+        if (savedCep && savedCep.length === 8) {
+          setCep(`${savedCep.slice(0, 5)}-${savedCep.slice(5, 8)}`);
         }
       }
     } catch (e) {
@@ -123,70 +134,35 @@ export default function CheckoutPage() {
       if (!data.erro) {
         setForm(prev => ({ ...prev, street: data.logradouro, neighborhood: data.bairro, city: data.localidade, state: data.uf }));
         
-        // Simulação baseada nas regras de negócios da ABC Master Embalagens
-        const firstTwo = cleaned.substring(0, 2);
-        const isSpMetropolitan = ['01', '02', '03', '04', '05', '06', '07', '08', '09'].includes(firstTwo);
+        // Mapear itens do carrinho
+        const cartItems = items.map(item => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity
+        }));
 
-        const now = new Date();
-        const isBefore11 = now.getHours() < 11;
+        // Calcular frete dinâmico com Balanced Bin Packing
+        const rawOptions = calculateShippingForCart(cleaned, cartItems);
 
-        const options = [];
+        // Mapear para o formato do checkout
+        const options = rawOptions.map(opt => ({
+          id: opt.id,
+          name: opt.name,
+          deadline: opt.deadline,
+          price: opt.price
+        }));
 
-        if (isSpMetropolitan) {
-          options.push({
-            id: 'flex',
-            name: 'ABC Master Flex (Motoboy)',
-            deadline: isBefore11 ? 'Chega HOJE (se comprado até 11h)' : 'Chega AMANHÃ (compras após as 11h)',
-            price: 12.90
-          });
-
-          options.push({
-            id: 'jadlog_express',
-            name: 'Jadlog Express',
-            deadline: '2 dias úteis',
-            price: 18.50
-          });
-
-          options.push({
-            id: 'sedex',
-            name: 'SEDEX (Correios)',
-            deadline: '2 dias úteis',
-            price: 21.40
-          });
-
-          options.push({
-            id: 'pac',
-            name: 'PAC (Correios)',
-            deadline: '4 dias úteis',
-            price: 14.90
-          });
+        if (options.length > 0) {
+          setShippingOptions(options);
+          setSelectedShipping(options[0].id);
         } else {
-          options.push({
-            id: 'sedex',
-            name: 'SEDEX (Correios)',
-            deadline: '3 dias úteis',
-            price: 38.10
-          });
-
-          options.push({
-            id: 'jadlog_std',
-            name: 'Jadlog Standard',
-            deadline: '5 dias úteis',
-            price: 24.90
-          });
-
-          options.push({
-            id: 'pac',
-            name: 'PAC (Correios)',
-            deadline: '7 dias úteis',
-            price: 21.50
-          });
+          setShippingOptions([]);
+          setSelectedShipping('');
         }
-
-        setShippingOptions(options);
-        setSelectedShipping(options[0].id);
       }
-    } catch {}
+    } catch (e) {
+      console.error(e);
+    }
     setCepLoading(false);
   };
 
@@ -273,6 +249,19 @@ export default function CheckoutPage() {
   };
 
   const validateStep1 = () => {
+    if (user) {
+      // Sincroniza o estado do form com o do usuário logado para evitar que o rascunho de localStorage apague
+      setForm(prev => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+        cpf: user.cpf,
+        phone: user.phone || prev.phone || '',
+      }));
+      setError('');
+      return true;
+    }
+
     if (isCorporate) {
       if (!form.name || !form.cnpj || !form.phone || !form.email) {
         setError('Por favor, preencha todos os campos da empresa.');
