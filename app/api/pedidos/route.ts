@@ -81,14 +81,85 @@ export async function POST(req: NextRequest) {
           };
         });
 
-        // Monta o payload de Venda conforme API v3 do Bling
+        // 1. Verificar se o cliente já existe no Bling ERP pelo CPF/CNPJ, se não, cadastrá-lo
+        const cpfOrCnpjLimpo = cpfOrCnpj.replace(/\D/g, '');
+        let contactId = null;
+
+        try {
+          console.log(`🔍 Pesquisando contato no Bling ERP com documento: ${cpfOrCnpjLimpo}...`);
+          const resSearch = await axios.get(
+            `https://api.bling.com.br/Api/v3/contatos?numeroDocumento=${cpfOrCnpjLimpo}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Accept': 'application/json'
+              }
+            }
+          );
+          
+          if (resSearch.data?.data && resSearch.data.data.length > 0) {
+            contactId = resSearch.data.data[0].id;
+            console.log(`✓ Contato existente encontrado no Bling. ID: ${contactId}`);
+          }
+        } catch (searchErr: any) {
+          console.warn('⚠️ Erro ao pesquisar contato no Bling, prosseguindo para cadastrar:', searchErr.message);
+        }
+
+        if (!contactId) {
+          console.log(`➕ Contato não encontrado. Cadastrando novo cliente no Bling ERP: ${customerName}...`);
+          try {
+            const payloadContato = {
+              nome: customerName,
+              codigo: cpfOrCnpjLimpo,
+              tipo: 'C', // C = Cliente
+              situacao: 'A', // A = Ativo
+              cpf_cnpj: cpfOrCnpjLimpo,
+              telefone: address?.phone || '',
+              email: email,
+              endereco: {
+                geral: {
+                  endereco: address?.street || '',
+                  numero: address?.number || '',
+                  complemento: address?.complement || '',
+                  bairro: address?.neighborhood || '',
+                  cep: address?.cep || '',
+                  municipio: address?.city || '',
+                  uf: address?.state || ''
+                }
+              }
+            };
+
+            const resCreateContact = await axios.post(
+              'https://api.bling.com.br/Api/v3/contatos',
+              payloadContato,
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (resCreateContact.status === 201 || resCreateContact.status === 200) {
+              contactId = resCreateContact.data?.data?.id;
+              console.log(`✓ Novo contato criado com sucesso no Bling ERP. ID: ${contactId}`);
+            }
+          } catch (createContactErr: any) {
+            const errDetails = createContactErr.response?.data || createContactErr.message;
+            console.error('❌ Falha ao criar contato no Bling:', JSON.stringify(errDetails));
+            throw new Error('Falha ao registrar contato do cliente no Bling ERP: ' + JSON.stringify(errDetails));
+          }
+        }
+
+        if (!contactId) {
+          throw new Error('Não foi possível obter ou criar um ID de contato válido no Bling ERP.');
+        }
+
+        // Monta o payload de Venda conforme API v3 do Bling referenciando o ID do contato obtido
         const payloadBling = {
           contato: {
-            nome: customerName,
-            tipoPessoa: isCorporate ? 'J' : 'F',
-            numeroDocumento: cpfOrCnpj.replace(/\D/g, ''),
-            email: email,
-            telefone: address?.phone || ''
+            id: Number(contactId)
           },
           itens: blingItens,
           transporte: {
@@ -131,7 +202,16 @@ export async function POST(req: NextRequest) {
         console.warn('⚠️ Bling desconectado ou sem token ativo. O pedido não pôde ser integrado.');
       }
     } catch (blingError: any) {
-      console.error('❌ Falha na integração do pedido com o Bling ERP:', blingError.response?.data || blingError.message);
+      const errorData = blingError.response?.data || { message: blingError.message };
+      console.error('❌ Falha na integração do pedido com o Bling ERP:', JSON.stringify(errorData));
+      
+      return NextResponse.json({
+        success: true,
+        orderId: createdOrderInDb?.id || idLocal || 'order-offline',
+        integratedWithBling: false,
+        blingOrderId: null,
+        blingError: errorData
+      });
     }
 
     return NextResponse.json({
