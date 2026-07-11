@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
             const payloadContato = {
               nome: customerName,
               codigo: cpfOrCnpjLimpo,
-              tipo: 'C', // C = Cliente
+              tipo: isCorporate ? 'Juridica' : 'Física', // Física ou Juridica por extenso na v3
               situacao: 'A', // A = Ativo
               cpf_cnpj: cpfOrCnpjLimpo,
               telefone: address?.phone || '',
