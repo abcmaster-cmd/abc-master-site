@@ -287,7 +287,7 @@ export default function BlingImportPage() {
 
   // Excluir todos os produtos importados/clonados do Bling
   const handleRemoveAllBlingClones = () => {
-    if (!confirm('ATENÇÃO: Isso excluirá PERMANENTEMENTE da sua loja virtual todos os anúncios comerciais que foram clonados/importados diretamente do Bling. Deseja continuar?')) {
+    if (!confirm('ATENÇÃO: Isso excluirá apenas da sua loja virtual (site) todos os anúncios que foram clonados do Bling. O cadastro físico de produtos dentro da sua conta do Bling ERP continuará 100% intacto e intocado. Deseja continuar?')) {
       return;
     }
 
@@ -386,7 +386,7 @@ export default function BlingImportPage() {
               <div style={{ textAlign: 'left' }}>
                 <h4 style={{ margin: '0 0 4px 0', color: '#C5221F', fontSize: '0.92rem', fontWeight: 700 }}>⚠️ Zona de Ações Avançadas (Catálogo)</h4>
                 <p style={{ margin: 0, fontSize: '0.78rem', color: '#666' }}>
-                  Ações rápidas para desvincular o e-commerce ou excluir do site anúncios importados diretamente do Bling.
+                  Ações rápidas para desvincular o e-commerce ou excluir do site anúncios importados. <strong style={{ color: '#C5221F' }}>Nota: Estas ações modificam apenas o site e não alteram nada no seu Bling ERP.</strong>
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
