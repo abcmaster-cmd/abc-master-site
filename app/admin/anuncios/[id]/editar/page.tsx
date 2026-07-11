@@ -363,6 +363,8 @@ export default function EditarAnuncioPage() {
       minStock: bulkMinStock !== '' ? bulkMinStock : v.minStock,
     })));
     alert('Valores em lote aplicados com sucesso na tabela abaixo!');
+  };
+
   // Modificar linha individual
   const handleVariationChange = (idx: number, field: keyof Variation, val: string) => {
     const updated = [...variations];

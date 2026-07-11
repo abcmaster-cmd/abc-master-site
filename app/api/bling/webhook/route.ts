@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
-import { getProductsServerSide, saveProductsServerSide } from '@/lib/productDatabase';
+import { getProductsServerSide, saveProductsServerSide } from '@/lib/productDatabaseServer';
 
 const prisma = new PrismaClient();
 

@@ -333,50 +333,9 @@ export const INITIAL_UNIFIED_PRODUCTS: Product[] = [
 
 const VERSION = '1.2';
 
-export function getProductsServerSide(): Product[] {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const dirPath = path.join(process.cwd(), 'scratch');
-    const filePath = path.join(dirPath, 'products_persist.json');
-
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify(INITIAL_UNIFIED_PRODUCTS, null, 2), 'utf-8');
-      return INITIAL_UNIFIED_PRODUCTS;
-    }
-
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error('⚠️ Falha ao ler products_persist.json no servidor:', err);
-    return INITIAL_UNIFIED_PRODUCTS;
-  }
-}
-
-export function saveProductsServerSide(products: Product[]): void {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const dirPath = path.join(process.cwd(), 'scratch');
-    const filePath = path.join(dirPath, 'products_persist.json');
-
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-
-    fs.writeFileSync(filePath, JSON.stringify(products, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('⚠️ Falha ao salvar products_persist.json no servidor:', err);
-  }
-}
-
 export function getProducts(): Product[] {
   if (typeof window === 'undefined') {
-    return getProductsServerSide();
+    return INITIAL_UNIFIED_PRODUCTS;
   }
   const stored = localStorage.getItem('abc_products');
   const storedVersion = localStorage.getItem('abc_products_version');
@@ -407,8 +366,6 @@ export function saveProducts(products: Product[]): void {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(products)
     }).catch(err => console.warn('Erro ao sincronizar produtos com o servidor:', err));
-  } else {
-    saveProductsServerSide(products);
   }
 }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getProductsServerSide, saveProductsServerSide } from '@/lib/productDatabase';
+import { getProductsServerSide, saveProductsServerSide } from '@/lib/productDatabaseServer';
 
 // Retorna a lista de produtos persistida no servidor
 export async function GET() {
