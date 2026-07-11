@@ -1,39 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  price: number;
-  stock: number;
-  status: 'active' | 'inactive';
-  category: string;
-  sales: number;
-  // especificações
-  width: string;
-  height: string;
-  thickness: string;
-  imageColor: string; // cor simulada para a imagem
-}
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: '1 Kg Saco Plástico PE 50 X 70 X 0,20 Grosso', sku: 'PE-020-50x70', price: 53.91, stock: 120, status: 'active', category: 'Sacos PE', sales: 412, width: '50', height: '70', thickness: '0.20', imageColor: '#E5E7EB' },
-  { id: '2', name: 'Saco Plástico Zip Lock N05 10x14cm (100un)', sku: 'ZIP-N05-10x14', price: 34.90, stock: 180, status: 'active', category: 'Zip Lock', sales: 128, width: '10', height: '14', thickness: '0.08', imageColor: '#F3F4F6' },
-  { id: '3', name: 'Sacos a Vácuo 20x30cm Termoencolhível (100un)', sku: 'VAC-20x30', price: 89.90, stock: 15, status: 'active', category: 'Sacos a Vácuo', sales: 94, width: '20', height: '30', thickness: '0.15', imageColor: '#D1D5DB' },
-  { id: '4', name: 'Saco Plástico PE Canela 60x80cm Reciclado (100un)', sku: 'PE-CAN-60x80', price: 45.00, stock: 45, status: 'active', category: 'Sacos PE', sales: 63, width: '60', height: '80', thickness: '0.12', imageColor: '#D6D3D1' },
-  { id: '5', name: 'Saco Zip Lock Azul Metálico Stand-up Pouch 12x20cm', sku: 'ZIP-SP-12x20', price: 59.90, stock: 0, status: 'inactive', category: 'Zip Lock', sales: 8, width: '12', height: '20', thickness: '0.08', imageColor: '#BFDBFE' },
-  { id: '6', name: 'Sacos a Vácuo Gofrados para Alimentos 15x25cm (50un)', sku: 'VAC-GOF-15x25', price: 29.90, stock: 95, status: 'active', category: 'Sacos a Vácuo', sales: 320, width: '15', height: '25', thickness: '0.09', imageColor: '#E5E7EB' },
-];
+import { getProducts, saveProducts } from '@/lib/productDatabase';
+import type { Product } from '@/lib/productDatabase';
 
 function formatCurrency(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 export default function ShopeeAnunciosPage() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    setProducts(getProducts());
+    setInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    if (initialized) {
+      saveProducts(products);
+    }
+  }, [products, initialized]);
   
   // Estados de busca (Shopee Filter Grid)
   const [searchName, setSearchName] = useState('');
@@ -88,9 +77,18 @@ export default function ShopeeAnunciosPage() {
 
   // Filtragem dos Anúncios
   const filteredProducts = products.filter(p => {
+    const normalizeCategory = (cat: string) => {
+      if (!cat) return '';
+      const c = cat.toLowerCase();
+      if (c.includes('pe')) return 'pe';
+      if (c.includes('zip')) return 'zip';
+      if (c.includes('vácuo') || c.includes('vacuo')) return 'vacuo';
+      return c;
+    };
+
     const matchesName = p.name.toLowerCase().includes(appliedName.toLowerCase());
     const matchesSku = p.sku.toLowerCase().includes(appliedSku.toLowerCase());
-    const matchesCategory = appliedCategory === 'Todos' || p.category === appliedCategory;
+    const matchesCategory = appliedCategory === 'Todos' || normalizeCategory(p.category) === normalizeCategory(appliedCategory);
     const matchesPriceMin = appliedPriceMin === '' || p.price >= parseFloat(appliedPriceMin);
     const matchesPriceMax = appliedPriceMax === '' || p.price <= parseFloat(appliedPriceMax);
 
@@ -383,13 +381,15 @@ export default function ShopeeAnunciosPage() {
                           }}>
                             <img
                               src={
-                                p.name.toLowerCase().includes('canela')
+                                p.image
+                                  ? p.image
+                                  : p.name.toLowerCase().includes('canela')
                                   ? '/saco_canela.png'
-                                  : p.category === 'Sacos PE'
+                                  : p.category === 'Sacos PE' || p.category === 'pe'
                                   ? '/saco_pe.png'
-                                  : p.category === 'Zip Lock'
+                                  : p.category === 'Zip Lock' || p.category === 'zip'
                                   ? '/saco_zip.png'
-                                  : p.category === 'Sacos a Vácuo'
+                                  : p.category === 'Sacos a Vácuo' || p.category === 'vacuo'
                                   ? '/saco_vacuo.png'
                                   : '/saco_pe.png'
                               }
@@ -402,7 +402,7 @@ export default function ShopeeAnunciosPage() {
                               {p.name}
                             </p>
                             <span style={{ fontSize: '0.72rem', background: '#f3f4f6', color: '#6b7280', padding: '2px 6px', borderRadius: 4 }}>
-                              ID: #{p.id} | {p.category}
+                              ID: #{p.id} | {p.category === 'pe' ? 'Sacos PE' : p.category === 'zip' ? 'Zip Lock' : p.category === 'vacuo' ? 'Sacos a Vácuo' : p.category}
                             </span>
                           </div>
                         </div>

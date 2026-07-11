@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { getProducts, saveProducts, getInstallments } from '@/lib/productDatabase';
 
 interface Attribute {
   name: string;
@@ -30,6 +31,12 @@ interface ProductData {
   height: string;
   thickness: string;
   material: string;
+  prodWeight?: number | string;
+  image?: string;
+  pkgWidth?: number | string;
+  pkgHeight?: number | string;
+  pkgLength?: number | string;
+  pkgWeight?: number | string;
   // Variações pré-configuradas (Mocks)
   hasVariations: boolean;
   attributes: Attribute[];
@@ -152,11 +159,20 @@ export default function EditarAnuncioPage() {
   const [minStock, setMinStock] = useState('');
   const [description, setDescription] = useState('');
   
-  // Especificações Físicas
+  // Especificações Físicas do Produto
   const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
+  const [height, setHeight] = useState(''); // Comprimento do Produto (cm)
   const [thickness, setThickness] = useState('');
+  const [prodWeight, setProdWeight] = useState('');
   const [material, setMaterial] = useState('');
+  const [recommendation, setRecommendation] = useState(''); // Recomendação de Uso (Indicação)
+  const [image, setImage] = useState(''); // Novo estado de imagem (Base64 / WebP)
+  
+  // Especificações Físicas da Embalagem
+  const [pkgWidth, setPkgWidth] = useState('');
+  const [pkgHeight, setPkgHeight] = useState('');
+  const [pkgLength, setPkgLength] = useState('');
+  const [pkgWeight, setPkgWeight] = useState('');
 
   // Controle de Variações
   const [hasVariations, setHasVariations] = useState(false);
@@ -177,7 +193,12 @@ export default function EditarAnuncioPage() {
   // Carregar dados iniciais do produto com suporte a variações
   useEffect(() => {
     if (productId) {
-      const product = MOCK_PRODUCTS.find(p => p.id === productId);
+      const list = getProducts();
+      let product = list.find((p: any) => p.id === productId);
+      if (!product) {
+        product = MOCK_PRODUCTS.find(p => p.id === productId);
+      }
+
       if (product) {
         setName(product.name);
         setCategory(product.category);
@@ -191,6 +212,13 @@ export default function EditarAnuncioPage() {
         setHeight(product.height);
         setThickness(product.thickness);
         setMaterial(product.material);
+        setRecommendation(product.recommendation || product.indication || product.specifications?.['Indicação'] || '');
+        setProdWeight(product.prodWeight?.toString() || '');
+        setImage(product.image || '');
+        setPkgWidth(product.pkgWidth?.toString() || '');
+        setPkgHeight(product.pkgHeight?.toString() || '');
+        setPkgLength(product.pkgLength?.toString() || '');
+        setPkgWeight(product.pkgWeight?.toString() || '');
         
         // Variações
         setHasVariations(product.hasVariations);
@@ -337,6 +365,73 @@ export default function EditarAnuncioPage() {
       }
     }
 
+    if (typeof window !== 'undefined') {
+      const currentProducts = getProducts();
+
+      const parsePrice = (valStr: string) => {
+        if (!valStr) return 0;
+        const clean = valStr.replace(/\./g, '').replace(/,/g, '.');
+        return parseFloat(clean) || 0;
+      };
+
+      const categoryMapping: Record<string, string> = {
+        'Sacos PE': 'pe',
+        'Zip Lock': 'zip',
+        'Sacos a Vácuo': 'vacuo'
+      };
+      const savedCategory = categoryMapping[category] || category;
+
+      // Variações limpas
+      const cleanVariations = variations.map(v => ({
+        ...v,
+        price: parsePrice(v.price).toFixed(2),
+        stock: parseInt(v.stock) || 0,
+        minStock: parseInt(v.minStock) || 10
+      }));
+
+      // Procura o produto e atualiza seus campos
+      const index = currentProducts.findIndex(p => p.id === productId);
+      
+      const updatedProduct = {
+        id: productId,
+        name: name,
+        sku: sku,
+        price: parsePrice(price),
+        originalPrice: originalPrice ? parsePrice(originalPrice) : undefined,
+        discount: originalPrice && parsePrice(originalPrice) > parsePrice(price)
+          ? Math.round(((parsePrice(originalPrice) - parsePrice(price)) / parsePrice(originalPrice)) * 100)
+          : 0,
+        stock: parseInt(stock) || 0,
+        minStock: parseInt(minStock) || 10,
+        status: 'active',
+        category: savedCategory,
+        sales: index >= 0 ? (currentProducts[index].sales || 0) : 0,
+        width: width,
+        height: height,
+        thickness: thickness,
+        material: material,
+        recommendation: recommendation,
+        prodWeight: parsePrice(prodWeight),
+        image: image || '',
+        pkgWidth: parsePrice(pkgWidth),
+        pkgHeight: parsePrice(pkgHeight),
+        pkgLength: parsePrice(pkgLength),
+        pkgWeight: parsePrice(pkgWeight),
+        hasVariations,
+        variations: cleanVariations,
+        installments: getInstallments(parsePrice(price)),
+        freeShipping: false
+      };
+
+      if (index >= 0) {
+        currentProducts[index] = updatedProduct;
+      } else {
+        currentProducts.push(updatedProduct);
+      }
+
+      saveProducts(currentProducts);
+    }
+
     alert('Anúncio atualizado com sucesso!');
     router.push('/admin/anuncios');
   };
@@ -414,6 +509,50 @@ export default function EditarAnuncioPage() {
                 </div>
               </div>
 
+            </div>
+          </div>
+
+          {/* Seção Imagem do Anúncio (Suporta WebP) */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>Imagem do Anúncio</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+              {image ? (
+                <div style={{ position: 'relative', width: 120, height: 120, border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden', background: '#F8F8F8' }}>
+                  <img src={image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button
+                    type="button"
+                    onClick={() => setImage('')}
+                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div style={{ width: 120, height: 120, border: '2px dashed #cbd5e1', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '1.8rem', background: '#f8fafc' }}>
+                  📷
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <label style={{ display: 'inline-block', background: '#FF6B00', color: '#fff', padding: '10px 18px', borderRadius: 6, fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', marginBottom: 8, transition: 'background-color 0.2s' }}>
+                  Escolher Foto do Produto
+                  <input
+                    type="file"
+                    accept="image/*, image/webp"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setImage(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>Suporta arquivos JPG, PNG e **WEBP**. Recomendado imagem quadrada.</p>
+              </div>
             </div>
           </div>
 
@@ -545,11 +684,13 @@ export default function EditarAnuncioPage() {
               <div className="form-group">
                 <label style={{ fontWeight: 600 }}>Preço de Venda Geral (R$)</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
+                  type="text"
+                  placeholder="Ex: 34,94 ou 34.94"
                   value={price}
-                  onChange={e => setPrice(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9.,]/g, '');
+                    setPrice(val);
+                  }}
                   disabled={hasVariations}
                   required={!hasVariations}
                 />
@@ -557,11 +698,13 @@ export default function EditarAnuncioPage() {
               <div className="form-group">
                 <label style={{ fontWeight: 600 }}>Preço Original Geral (R$ - Opcional)</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
+                  type="text"
+                  placeholder="Ex: 59,90"
                   value={originalPrice}
-                  onChange={e => setOriginalPrice(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9.,]/g, '');
+                    setOriginalPrice(val);
+                  }}
                   disabled={hasVariations}
                 />
               </div>
@@ -599,11 +742,13 @@ export default function EditarAnuncioPage() {
               <div style={{ background: '#FFF0E6', border: '1px solid #FFE2D1', borderRadius: 6, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>⚡ Preencher em Lote:</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
                   placeholder="Preço R$"
                   value={bulkPrice}
-                  onChange={e => setBulkPrice(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9.,]/g, '');
+                    setBulkPrice(val);
+                  }}
                   style={{ width: 110, padding: '6px 10px', fontSize: '0.82rem', border: '1px solid #ccc', borderRadius: 4, background: '#fff' }}
                 />
                 <input
@@ -656,10 +801,12 @@ export default function EditarAnuncioPage() {
                       </td>
                       <td>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           value={v.price}
-                          onChange={e => handleVariationChange(idx, 'price', e.target.value)}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9.,]/g, '');
+                            handleVariationChange(idx, 'price', val);
+                          }}
                           placeholder="0,00"
                           style={{ width: '80%', padding: '6px 10px', fontSize: '0.8rem', border: '1px solid #ccc', borderRadius: 4 }}
                           required
@@ -692,45 +839,113 @@ export default function EditarAnuncioPage() {
             </div>
           )}
 
-          {/* Especificações Físicas da Embalagem */}
+          {/* Especificações Técnicas do Produto (Ficha Técnica) */}
           <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)', opacity: hasVariations ? 0.6 : 1 }}>
             <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>
-              Especificações da Embalagem {hasVariations && <span style={{ fontSize: '0.78rem', color: '#777', fontWeight: 500 }}>(Sobrescritas por variação)</span>}
+              Especificações Técnicas do Produto (Ficha Técnica) {hasVariations && <span style={{ fontSize: '0.78rem', color: '#777', fontWeight: 500 }}>(Sobrescritas por variação)</span>}
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>Largura (cm)</label>
+                <label style={{ fontWeight: 600 }}>Largura do Produto (cm)</label>
                 <input
                   type="text"
+                  placeholder="Ex: 35"
                   value={width}
-                  onChange={e => setWidth(e.target.value)}
+                  onChange={e => setWidth(e.target.value.replace(/[^0-9.,]/g, ''))}
                   disabled={hasVariations}
                 />
               </div>
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>Altura (cm)</label>
+                <label style={{ fontWeight: 600 }}>Comprimento do Produto (cm)</label>
                 <input
                   type="text"
+                  placeholder="Ex: 55"
                   value={height}
-                  onChange={e => setHeight(e.target.value)}
+                  onChange={e => setHeight(e.target.value.replace(/[^0-9.,]/g, ''))}
                   disabled={hasVariations}
                 />
               </div>
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>Espessura (mm)</label>
+                <label style={{ fontWeight: 600 }}>Espessura do Produto (mm)</label>
                 <input
                   type="text"
+                  placeholder="Ex: 0.20"
                   value={thickness}
-                  onChange={e => setThickness(e.target.value)}
+                  onChange={e => setThickness(e.target.value.replace(/[^0-9.,]/g, ''))}
                   disabled={hasVariations}
                 />
               </div>
-              <div className="form-group" style={{ gridColumn: 'span 3' }}>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Peso do Produto (kg)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 1.0 ou 3.0"
+                  value={prodWeight}
+                  onChange={e => setProdWeight(e.target.value.replace(/[^0-9.,]/g, ''))}
+                  disabled={hasVariations}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label style={{ fontWeight: 600 }}>Material / Composição</label>
                 <input
                   type="text"
                   value={material}
                   onChange={e => setMaterial(e.target.value)}
+                  placeholder="Ex: Polietileno de Baixa Densidade (PEBD)"
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label style={{ fontWeight: 600 }}>Recomendação de Uso (Indicação)</label>
+                <input
+                  type="text"
+                  value={recommendation}
+                  onChange={e => setRecommendation(e.target.value)}
+                  placeholder="Ex: Roupas, e-commerce, confecção e alimentos"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Especificações Físicas da Embalagem de Envio */}
+          <div style={{ background: '#fff', borderRadius: 8, border: '1px solid var(--border)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <h3 style={{ marginBottom: 16, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-dark)', borderBottom: '1px solid #eee', paddingBottom: 8 }}>
+              Medidas da Embalagem de Envio (Logística)
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Largura da Embalagem (cm)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 25"
+                  value={pkgWidth}
+                  onChange={e => setPkgWidth(e.target.value.replace(/[^0-9.,]/g, ''))}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Altura da Embalagem (cm)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 10"
+                  value={pkgHeight}
+                  onChange={e => setPkgHeight(e.target.value.replace(/[^0-9.,]/g, ''))}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Comprimento da Embalagem (cm)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 30"
+                  value={pkgLength}
+                  onChange={e => setPkgLength(e.target.value.replace(/[^0-9.,]/g, ''))}
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ fontWeight: 600 }}>Peso da Embalagem (kg)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 0.15"
+                  value={pkgWeight}
+                  onChange={e => setPkgWeight(e.target.value.replace(/[^0-9.,]/g, ''))}
                 />
               </div>
             </div>
