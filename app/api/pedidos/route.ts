@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
         // Monta o payload de Venda conforme API v3 do Bling
         const payloadBling = {
-          cliente: {
+          contato: {
             nome: customerName,
             tipoPessoa: isCorporate ? 'J' : 'F',
             numeroDocumento: cpfOrCnpj.replace(/\D/g, ''),
