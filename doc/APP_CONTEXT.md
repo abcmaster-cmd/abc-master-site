@@ -65,11 +65,40 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
 - **Dropdown do Header**: O botão "Todos os Produtos" no menu de navegação superior foi convertido em um dropdown suspenso funcional ativado por hover.
 - **Mix de Produtos Simplificado**: Menu e categorias simplificados para conter apenas as categorias de atuação inicial: "Sacos Plásticos PE", "Sacos Zip Lock" e "Sacos a Vácuo". Foram criados os mocks e ranhuras de imagem específicas para a categoria de sacos a vácuo na loja.
 - **Desenvolvimento Local**: Rodando Next.js localmente na porta 3000 (`npm run dev`).
+- **Desenvolvimento Local**: Rodando Next.js localmente na porta 3000 (`npm run dev`).
+- **Infraestrutura de Produção e Deploy**:
+  - **Vercel**: Hospedado com sucesso via Vercel CLI na URL `https://abc-master-site-mq2sxf8cf-vinicius-marinhos-projects.vercel.app`.
+  - **Render**: Banco de dados PostgreSQL managed.
+  - **Hostinger VPS (migração futura)**: Next.js via `pm2` + Nginx como reverse proxy + PostgreSQL local.
+  - **Build Command na Vercel**: `prisma generate && next build` (geração do Prisma Client antes do bundle).
+  - **`postinstall`**: `prisma generate` adicionado no `package.json`.
+  - **Erros de Build Corrigidos**:
+    - Faltava importar `useEffect` no arquivo `app/carrinho/page.tsx`.
+    - Envolvido o componente principal de `app/login/page.tsx` com `Suspense` para corrigir o erro de prerendering devido ao uso de `useSearchParams()`.
+    - Removida a chave experimental `eslint` do `next.config.ts`.
+  - **Novidades Bling ERP (API v3)**:
+    - Implementado suporte completo de **Variações de Produtos** que agrupa automaticamente variações filhas nos produtos pais no mapeamento e importação.
+    - Implementada função de **Importar Catálogo Completo** com paginação sequencial automática de todos os produtos do Bling em lote.
+    - Criada a rota de **Webhook do Bling** em `/api/bling/webhook` com validação de assinatura `x-bling-signature-256` (HMAC-SHA256) para receber alterações em tempo real de estoque e dados de produtos.
+  - **`.gitignore` atualizado**: `.env.example` agora é rastreado pelo git (referência pública), enquanto `.env.local` e `.env` permanecem ignorados.
+  - **Commits e Pushes enviados** para `abcmaster-cmd/abc-master-site` (branch `main`).
+
+
 
 ---
 
 ## 🛠️ O que foi feito recentemente:
-1. **Página de Produtos Estilo Shopee Seller Center & Controle de Estoque**:
+1. **Unificação do Header Global, Menu de Usuário com Abas & Novo Clube Master+**:
+   - Removido o cabeçalho inline duplicado da Home Page (`app/page.tsx`) e substituído pela importação do componente global `<Header />` de `components/Header.tsx`, limpando imports, variáveis e estados de scroll/carrinho duplicados.
+   - **Borda na Barra de Pesquisa**: Adicionada borda cinza claro (`#d0d0d0`) unificada ao redor de todo o formulário de busca no Header global, com efeito suave de transição CSS que altera a cor da borda para laranja (`#FF6B00`) e adiciona uma sombra leve de destaque ao receber foco.
+   - **Menu de Usuário com Abas Sincronizadas**: Criado menu suspenso (dropdown) interativo ao passar o mouse no perfil do usuário logado em `components/Header.tsx`, contendo links com parâmetros de query URL para alternar entre as abas na Central do Usuário de forma instantânea.
+   - **Remodelagem da Central do Usuário (`app/central-usuario/page.tsx`)**: Reconstruída no padrão de abas interativas no lado do cliente, integrada e sincronizada com a URL, permitindo navegar entre:
+      * *Meus Pedidos*: Listagem unificada de todas as compras da conta, incluindo pedidos em andamento e finalizados (`pending`, `in_process`, `approved`, `shipped`, `delivered`, `rejected`).
+     * *Dados Pessoais*: Formulário editável para alteração e persistência local (no `localStorage`) do nome e telefone do cliente.
+     * *Dados de Faturamento (CNPJ)*: Painel de preenchimento de dados corporativos (Razão Social, CNPJ, I.E., Endereço) persistidos localmente para auto-completação inteligente do Checkout B2B.
+     * *Minhas Avaliações*: Catálogo de produtos comprados em pedidos aprovados, fornecendo botão de redirecionamento focado na âncora `#avaliacoes` do produto para avaliação.
+   - **Página Master+ (`app/master-plus/page.tsx`)**: Criada nova página para o programa de vantagens B2B/B2C da ABC Master Embalagens, detalhando frete fixo express regional (R$ 12,90), tabela de desconto progressivo em lote, suporte corporativo técnico e FAQ sanfonado interativo.
+2. **Página de Produtos Estilo Shopee Seller Center & Controle de Estoque**:
    - A página de **Anúncios** (`app/admin/anuncios/page.tsx`) foi completamente redesenhada no estilo do **Shopee Seller Center**.
    - **Filtros Avançados (Grid)**: Inclui painel de busca avançada por Nome do Produto, SKU, Categoria (PE, Zip, Vácuo) e faixa de preço (Mínimo/Máximo), além de botões "Pesquisar" e "Limpar Filtros".
    - **Abas de Status (Estilo Shopee)**: Abas minimalistas com contadores dinâmicos para alternar entre "Todos", "Ativos" (em estoque), "Esgotados" (sem estoque) e "Inativos/Rascunhos".
@@ -82,17 +111,22 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
    - Criada a página de **Configurações** (`app/admin/config/page.tsx`) com abas para dados cadastrais oficiais da empresa (Razão Social, CNPJ, Inscrição Estadual e endereço completo), chaves de integração/API (Bling, Mercado Pago, Resend) e regras de frete (CEP de origem).
    - Criadas as páginas de **Novo Anúncio** (`app/admin/anuncios/novo/page.tsx`) e **Editar Anúncio** (`app/admin/anuncios/[id]/editar/page.tsx`) integrando um widget completo e interativo de **Variações de Produtos** (Tamanho, Espessura, Cor). O widget realiza a combinação combinatória cartesiana das opções adicionadas nos atributos, monta uma tabela editável com SKU/Preço/Estoque individuais, desabilita os campos de faturamento gerais quando ativo para evitar conflitos de dados, fornece preenchimento em lote (bulk apply) de forma ágil e valida o formulário impedindo o cadastro de campos vazios nas variações.
    - Criada a página de **Detalhe do Pedido** (`app/admin/pedidos/[id]/page.tsx`) exibindo resumo financeiro completo, tabela de itens comprados com miniatura, informações cadastrais e fiscais do comprador, dados logísticos com rastreamento ativo e uma linha do tempo histórica do pedido, além de ações de emissão ágil de NF-e e etiquetas de envio.
- 2. **Dashboard de Desempenho Estilo Mercado Livre**:
+3. **Motor de Cálculo de Frete Inteligente (Balanced Bin Packing)**:
+   - **Utilitário Central ([lib/shippingOptimizer.ts](file:///c:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/lib/shippingOptimizer.ts))**: Desenvolvemos um algoritmo de distribuição balanceada de volumes (Balanced Bin Packing) focado no mix de produtos da ABC Master (1 kg, 3 kg e 5 kg). O algoritmo calcula o número mínimo de volumes necessários sem ultrapassar o limite máximo por caixa (Correios/Jadlog = 30 kg, Flex = 20 kg) e redistribui a carga de forma equilibrada (usando LPT heuristic nos grandes e itens de 1 kg como ajuste fino).
+   - **Integração no Carrinho ([app/carrinho/page.tsx](file:///c:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/app/carrinho/page.tsx))**: Refatoramos o simulador de frete para calcular tarifas dinâmicas cotando cada volume de forma individual e somando-as no final. A interface exibe a quantidade exata de volumes gerada.
+   - **Integração na Página do Produto ([app/loja/[id]/page.tsx](file:///c:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/app/loja/[id]/page.tsx))**: A calculadora rápida de frete projeta a cubagem com base no peso e na quantidade selecionada do produto.
+   - **Integração no Checkout ([app/checkout/page.tsx](file:///c:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/app/checkout/page.tsx))**: O fluxo de entrega calcula o frete real por volumes e o valor consolidado é salvo nos pedidos finais.
+4. **Dashboard de Desempenho Estilo Mercado Livre**:
    - O Dashboard Administrativo (`app/admin/dashboard/page.tsx`) foi completamente redesenhado no leiaute do **Mercado Livre / Mercado Pago**.
    - **Abas Superiores**: Abas de navegação horizontais estilizadas no padrão do Mercado Livre (Resumo, Anúncios, Vendas, Métricas, Preferências).
    - **Barra de Filtros**: Controles superiores para "Período principal" (dropdown contendo 7d, 15d, 30d, 60d, 90d) e comparação travada com o "Período anterior" de igual tamanho, acompanhado por botões de ação de relatórios e filtros.
    - **Resumo de Desempenho (Grid de 8 Cartões)**: Grade de 8 cartões reativos exibindo Vendas Brutas (com barra vermelha no topo no cartão principal), Unidades Vendidas, Preço Médio por Unidade, Visitas, Compradores, Quantidade de Vendas, Conversão e Preço Médio por Venda (Ticket Médio). Cada cartão exibe um badge colorido de variação percentual dinâmica calculada contra o período equivalente anterior (Verde ▲ para alta, Vermelho ▼ para queda).
    - **Gráfico de Linhas Dinâmico em SVG**: Curva de linhas suavizada (path Bézier SVG) contendo duas linhas comparativas: a linha rosa/magenta representando a receita do período atual e a linha cinza representando a receita do período anterior. A forma do traçado é reativa e muda dinamicamente de acordo com a quantidade de dias selecionada.
    - **Ajuste de Ações Rápidas**: Cartões de ação rápida e atalhos estilizados e links corrigidos para redirecionar ao fluxo de pedidos unificado.
-3. **Banner Hero Boxed (Estilo Atacadão)**:
+4. **Banner Hero Boxed (Estilo Atacadão)**:
    - O Banner Hero na Home Page (`app/page.tsx`) foi envolto em um container de largura máxima de `1200px` (`maxWidth: 1200`), com margem automática (`margin: '24px auto 12px auto'`) e bordas arredondadas de `12px` (`borderRadius: '12px'`).
    - Dessa forma, o banner não preenche mais toda a largura horizontal (100% da viewport), alinhando-se harmoniosamente com o grid do restante da página e simulando o estilo de banners do Atacadão.
-4. **Ajustes Visuais no Header (components/Header.tsx e app/page.tsx)**:
+5. **Ajustes Visuais no Header (components/Header.tsx e app/page.tsx)**:
    - Aumentado o padding vertical do bloco logo + barra de pesquisa de `14px` para `22px` (superior e inferior), dando mais respiro à área principal do cabeçalho.
    - Menu de navegação de categorias alterado de fundo branco para **fundo laranja (#FF6B00)** em toda a barra, unificando a identidade visual.
    - Botão "Todos os Produtos" recebeu fundo `rgba(0,0,0,0.2)` (escurecimento sutil) para se destacar dentro da barra laranja.
@@ -103,8 +137,8 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
  6. **Logotipos Redimensionados e Ampliados**:
    - Ampliado o logotipo dos cabeçalhos ([components/Header.tsx](file:///C:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/components/Header.tsx) e [app/page.tsx](file:///C:/Users/Vinicius/.gemini/antigravity/scratch/abc-master-ecommerce/app/page.tsx)) de `150x44` para `210x62` pixels.
    - Ampliado o logotipo do rodapé na Home Page de `130x40` para `170x50` pixels.
- 7. **Inicialização do Servidor de Desenvolvimento**:
-   - O servidor local de desenvolvimento do Next.js foi reiniciado com sucesso em segundo plano (`npm run dev`) sob o ID de tarefa `task-419` após um reinício de sessão, disponibilizando as páginas de forma dinâmica no ambiente local.
+  7. **Inicialização do Servidor de Desenvolvimento**:
+    - O servidor local de desenvolvimento do Next.js foi iniciado com sucesso em segundo plano (`npm run dev`) sob o ID de tarefa `task-10`, disponibilizando as páginas de forma dinâmica no ambiente local (porta 3000).
  8. **Imagens Reais de Produtos (PNG)**:
    - Foram geradas fotos profissionais de estúdio para os produtos usando inteligência artificial: `/saco_pe.png` (saco PE transparente), `/saco_zip.png` (saco zip com lacre vermelho), `/saco_vacuo.png` (saco texturizado a vácuo) e `/saco_canela.png` (saco PE reciclado marrom/canela).
    - Copiadas as imagens de forma física para a pasta `public/` do projeto.
@@ -172,5 +206,35 @@ Este documento registra o estado de desenvolvimento, arquitetura, fluxos e decis
       * Implementada a tela de checkout de pagamento interna no **Passo 3 (Pagamento)**, permitindo que o cliente selecione o meio de pagamento (Cartão de Crédito com formulário de dados e parcelas, Pix com QR Code e código copia e cola, ou Boleto Bancário) diretamente no site.
       * Corrigido o bug de tipagem no faturamento local dos itens, mapeando `price` para `unitPrice` da resposta do carrinho de compras e adicionando validações defensivas contra valores nulos na central.
     - Atualizada a página de Confirmação de Pedido (`app/sucesso/page.tsx`): substituído o botão genérico de suporte do WhatsApp pelo link de ação *"Acompanhar Pedido"*, direcionando o comprador à nova Central do Usuário (`/central-usuario`) para rastrear a entrega em tempo real. E efetuado o push das alterações diretamente na branch principal (`main`) no repositório remoto no GitHub.
-
-
+ 17. **Melhorias Visuais, Acessibilidade e Fotos Reais nos Cards**:
+    - **Unificação com Fotos Reais PNG**: Substituímos as ilustrações vetoriais e blocos beges estáticos nos cards de produtos de todas as páginas (catálogo de `/loja` e seção "Produtos do vendedor" no detalhe do produto `/loja/[id]`) pelas fotos profissionais de estúdio reais em PNG correspondentes (`/saco_pe.png`, `/saco_zip.png`, `/saco_vacuo.png`, `/saco_canela.png`).
+    - **Contraste de Cards & Destaque de Fundo**: Implementamos bordas cinzas mais nítidas (`#dcdcdc`) e sombras sutis (`boxShadow`) nos cards de produtos. Adicionamos uma micro-animação premium de elevação e ampliação de sombra no hover acompanhada de efeito de zoom suave na foto real (`scale(1.05)`).
+    - **Acessibilidade na Barra Lateral**: Aumentamos o contraste dos links da barra lateral esquerda de anúncios (mencionando categorias e faixas de preço de `#666` para `#334155`) e dos inputs de preço manual e botão de aplicar (de `#ccc` para `#94a3b8`), com efeitos adicionais de foco na cor laranja da marca.
+    - **Contraste no Rodapé**: Ajustamos o contraste dos direitos autorais e dados de CNPJ no rodapé da página do produto (de `#999` para `#475569`), garantindo conformidade com padrões de acessibilidade WCAG.
+ 18. **Simplificação de Navegação no Cabeçalho**:
+    - **Botão "Todos os Produtos" sem Dropdown e Igual às Categorias**: Removemos o menu suspenso interativo (dropdown) e o respectivo estado `dropdownOpen` do cabeçalho global (`components/Header.tsx`). O botão foi convertido em um link direto simples para a loja `/loja`, teve o ícone de hambúrguer (`☰ `) removido e foi estilizado com o mesmo design padrão (fundo laranja, hover com opacidade e friso branco inferior) dos links de categoria.
+    - **Remoção do Link "Ver tudo"**: Removemos o link redundante "Ver tudo →" posicionado no canto direito do menu de categorias laranja, simplificando a navegação.
+ 19. **Memorização de CEP Logística Dinâmica**:
+    - **Persistência de CEP Global**: Implementamos a sincronização e armazenamento automático do CEP do usuário sob a chave `'abc_user_cep'` no `localStorage` após qualquer cálculo bem-sucedido.
+    - **Auto-cálculo e Máscara**: Integramos o auto-carregamento e cálculo automático de frete dinâmico (conectando-se ao motor de Balanced Bin Packing) ao abrir qualquer página de produto (`app/loja/[id]/page.tsx`), carrinho de compras (`app/carrinho/page.tsx`) e na inicialização da entrega no checkout (`app/checkout/page.tsx`). Adicionamos máscara automática de CEP (`00000-000`) ao input do carrinho.
+ 20. **Remoção Completa de Menções a Frete Grátis**:
+    - **Ajuste nos Cards de Produtos**: Removemos a exibição condicional e o texto "Frete grátis" dos cards de produtos na Home Page (`app/page.tsx`), no catálogo (`app/loja/page.tsx`) e na lista de produtos do vendedor (`app/loja/[id]/page.tsx`), substituindo-os pelo rótulo uniforme "Frete a calcular".
+    - **Remoção de Filtros**: Eliminamos o filtro switch de "Frete grátis" e a respectiva variável de estado `onlyFreeShipping` da barra lateral de anúncios da loja.
+ 21. **Limpeza de Badges e Exposição de Meios de Pagamento**:
+    - **Remoção de Novo / Vendidos**: Removemos a informação estática "Novo | +100 vendidos" do topo da área de compra na página de detalhes do produto (`app/loja/[id]/page.tsx`).
+    - **Remoção da Promoção Mercado Pago**: Eliminamos a tag azul de "20% OFF Saldo no Mercado Pago" tanto dos cards de produto na Home Page (`app/page.tsx`) e no catálogo (`app/loja/page.tsx`), quanto da página de detalhes do produto.
+    - **Quadro de Meios de Pagamento Aceitos**: Criamos e integramos diretamente na página do produto um painel premium detalhando os meios de faturamento aceitos com ícones intuitivos (Cartão de Crédito em 3x sem juros, Pix com aprovação imediata e Boleto Bancário à vista), substituindo o antigo link flutuante azul "Ver meios de pagamento e promoções".
+ 22. **Melhorias e Flexibilidade na Criação/Edição de Produtos**:
+    - **Suporte a Vírgulas em Decimais**: Alteramos a tipagem dos inputs de preços (venda geral, original opcional, lote e variações) de `type="number"` para `type="text"`. Implementamos uma máscara regex `/[^0-9.,]/g` para possibilitar ao administrador digitar vírgulas e pontos decimais de forma fluida nos formulários de criação (`app/admin/anuncios/novo/page.tsx`) e edição (`app/admin/anuncios/[id]/editar/page.tsx`).
+    - **Upload de Fotos com Suporte a WebP**: Adicionamos um componente de upload de fotos com input de arquivo que aceita extensões de imagens incluindo `.webp`. O arquivo é reativamente lido em tempo real através do `FileReader` do JavaScript e renderizado como um preview de miniatura com opção de exclusão.
+    - **Separação de Medidas do Produto e Medidas da Embalagem**: Introduzimos dois blocos distintos de campos físicos: um para a Ficha Técnica do Produto (Largura do Produto, Comprimento do Produto, Espessura do Produto, Peso Unitário e Material) e outro para a logística de Envio (Largura da Embalagem, Altura da Embalagem, Comprimento da Embalagem e Peso da Embalagem).
+ 23. **Persistência Completa de Produtos (Banco Local localStorage)**:
+    - **Banco de Dados Local Unificado (Repository Pattern)**: Criamos uma biblioteca unificada de acesso a dados em `lib/productDatabase.ts` para ser a fonte única da verdade de produtos em todo o site. Ela gerencia o array padrão de produtos, a gravação e a atualização sob a chave `'abc_products'` com versionamento de banco na versão `'1.1'`.
+    - **Criação e Edição Sincronizadas**: Implementamos a lógica de gravação e atualização de anúncios consumindo a biblioteca unificada. Os novos produtos recebem IDs comerciais baseados em timestamp (`'prod-' + Date.now()`), evitando qualquer reset de cache ou conflitos de IDs no e-commerce.
+    - **Exibição Dinâmica e Reativa**: Adaptamos a listagem administrativa, o catálogo de produtos e os detalhes de produtos para consumirem o `lib/productDatabase.ts`.
+    - **Blindagem contra TypeError e Correção de Regras de Hooks**: Protegemos a função `formatCurrency` da listagem de pedidos administrativa contra valores `undefined`, `null` ou `NaN`. Corrigimos a ordem de declaração de Hooks na página de detalhes do produto (`app/loja/[id]/page.tsx`), eliminando o erro de crash do React. Blindamos a iteração da tabela de Ficha Técnica contra o erro `Cannot convert undefined or null to object` sob a chamada de `Object.entries(product.specifications)` nos produtos recém-criados que não possuem o objeto specifications cadastrado originalmente, construindo dinamicamente a tabela com base nas medidas individuais de largura, comprimento, espessura, peso e material inseridas no formulário.
+ 24. **Melhorias de Catálogo e Ficha Técnica**:
+    - **Campo Recomendação de Uso**: Adicionado o campo "Recomendação de Uso (Indicação)" nos formulários de criação (`app/admin/anuncios/novo/page.tsx`) e edição (`app/admin/anuncios/[id]/editar/page.tsx`) de anúncios. Esse campo é salvo no banco local e exibido automaticamente na tabela de Características Principais da página de detalhes do produto (`app/loja/[id]/page.tsx`), ao lado dos demais campos técnicos (material, largura, comprimento, espessura e peso).
+    - **Imagem do Card em Formato 1:1**: A área de imagem dos cards de produto no catálogo da loja (`app/loja/page.tsx`) foi alterada para formato quadrado usando `aspectRatio: '1 / 1'`. O `objectFit` foi mudado de `cover` (que recortava a imagem) para `contain` com padding interno de `12px`, garantindo que a imagem inteira seja visível sem distorções ou cortes, independentemente do tamanho original do arquivo.
+ 25. **Parcelamento Progressivo**:
+    - Criada a função `getInstallments(price)` em `lib/productDatabase.ts` com regra: **até R$ 50** → 1x; **R$ 50,01 a R$ 100** → 2x sem juros; **acima de R$ 100** → 3x sem juros. Todos os pontos de exibição (catálogo, detalhes, criação e edição) usam essa função dinamicamente.
